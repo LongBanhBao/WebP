@@ -13,6 +13,9 @@
   const whaleSprite = new Image();
   whaleSprite.decoding = "async";
   whaleSprite.src = "assets/cosmic-whale.png";
+  const babyWhaleSprite = new Image();
+  babyWhaleSprite.decoding = "async";
+  babyWhaleSprite.src = "assets/baby-cosmic-whale-alpha.png";
 
   const TAU = Math.PI * 2;
   const COLORS = ["#54efff", "#168cff", "#9a62ff", "#ff78bd", "#ffd78c"];
@@ -80,7 +83,7 @@
 
   const seed = { x: 0, y: 0 };
   const portal = { x: 0, y: 0, spin: 0 };
-  const hold = { active: false, progress: 0, ready: false };
+  const hold = { active: false, progress: 0, ready: false, startedAt: 0, startProgress: 0 };
   const moon = { nx: 0.82, ny: 0.24, rotation: 0, spin: 0, hit: false };
 
   const whale = {
@@ -90,10 +93,15 @@
     vy: 0,
     targetX: 0,
     targetY: 0,
+    aimX: 0,
+    aimY: 0,
     facing: 1,
     tilt: -0.16,
     reveal: 0,
     trailClock: 0,
+    trail: [],
+    swimPhase: 0,
+    bend: 0.8,
   };
 
   const wishMap = [
@@ -303,6 +311,12 @@
     whale.y *= sy;
     whale.targetX *= sx;
     whale.targetY *= sy;
+    whale.aimX *= sx;
+    whale.aimY *= sy;
+    whale.trail.forEach((point) => {
+      point.x *= sx;
+      point.y *= sy;
+    });
     portal.x *= sx;
     portal.y *= sy;
     birthParticles.forEach((particle) => {
@@ -563,15 +577,27 @@
     return clamp(Math.min(width, height) / 690, 0.5, 1.18);
   }
 
-  function whaleHeadReach(scale = whaleScale()) {
+  function activeWhaleScale(now = performance.now()) {
+    const base = whaleScale();
+    const phaseAge = Math.max(0, now - phaseStarted);
+    if (phase === "hunt") {
+      return base * lerp(1.18, 0.84, easeOutCubic(clamp(phaseAge / 900, 0, 1)));
+    }
+    if (phase === "portal") {
+      return base * lerp(0.84, 1, easeOutCubic(clamp(phaseAge / 680, 0, 1)));
+    }
+    return base;
+  }
+
+  function whaleHeadReach(scale = activeWhaleScale()) {
     return (whaleSprite.complete && whaleSprite.naturalWidth ? 185 : 90) * scale;
   }
 
-  function whaleTailReach(scale = whaleScale()) {
+  function whaleTailReach(scale = activeWhaleScale()) {
     return (whaleSprite.complete && whaleSprite.naturalWidth ? 190 : 95) * scale;
   }
 
-  function whaleBodyHalfWidth(scale = whaleScale()) {
+  function whaleBodyHalfWidth(scale = activeWhaleScale()) {
     return (whaleSprite.complete && whaleSprite.naturalWidth ? 210 : 100) * scale;
   }
 
@@ -584,9 +610,13 @@
     whale.y = height * 0.44;
     whale.targetX = whale.x;
     whale.targetY = whale.y;
+    whale.aimX = whale.x;
+    whale.aimY = whale.y;
     whale.vx = 0;
     whale.vy = 0;
     whale.reveal = 0;
+    whale.trail.length = 0;
+    whale.swimPhase = 0;
     setPrompt("Một nhịp thở giữa ngân hà", "Pastie vừa đánh thức người dẫn đường", 3200);
     liveStatus.textContent = "Ngôi sao tỏa sóng ánh sáng và đánh thức một cá voi chòm sao.";
     [0, 180, 390, 660].forEach((delay, index) => addRipple(x, y, COLORS[index], delay, 0.72 + index * 0.18));
@@ -705,7 +735,7 @@
 
   function prepareFinaleArt() {
     if (!finaleArt.style.backgroundImage) {
-      const image = 'url("assets/birthday-finale.png")';
+      const image = 'url("assets/finale-space.png")';
       finaleBlurArt.style.backgroundImage = image;
       finaleArt.style.backgroundImage = image;
     }
@@ -777,6 +807,8 @@
   function beginHolding(x, y) {
     hold.active = true;
     hold.ready = hold.progress >= 1;
+    hold.startedAt = performance.now();
+    hold.startProgress = hold.progress;
     portal.x = clamp(x, 70, width - 70);
     portal.y = clamp(y, 90, height - 130);
     experience.classList.add("is-charging");
@@ -787,6 +819,9 @@
 
   function releaseHolding() {
     if (!hold.active) return;
+    const chargeDuration = reducedMotion ? 900 : 1750;
+    hold.progress = clamp(hold.startProgress + (performance.now() - hold.startedAt) / chargeDuration, 0, 1);
+    hold.ready = hold.progress >= 1;
     hold.active = false;
     experience.classList.remove("is-charging");
     audio.endCharge();
@@ -833,6 +868,10 @@
     whale.y = height * 0.78;
     whale.vx = width * 0.22;
     whale.vy = -height * 0.03;
+    whale.aimX = whale.x;
+    whale.aimY = whale.y;
+    whale.facing = 1;
+    whale.trail.length = 0;
     emitParticles(portal.x, portal.y, reducedMotion ? 85 : 240, {
       minSpeed: 110,
       maxSpeed: 540,
@@ -885,10 +924,13 @@
     coreContext.lineJoin = "round";
     lines.forEach((line, index) => {
       coreContext.font = `900 ${line.size}px Arial, sans-serif`;
-      coreContext.fillStyle = index === lines.length - 1 ? "rgba(197, 242, 255, 0.86)" : "rgba(227, 249, 255, 0.78)";
-      coreContext.strokeStyle = index === lines.length - 1 ? "rgba(74, 201, 255, 0.92)" : "rgba(156, 196, 255, 0.8)";
-      coreContext.lineWidth = Math.max(1.2, line.size * 0.025);
+      coreContext.strokeStyle = "rgba(0, 8, 31, 0.94)";
+      coreContext.lineWidth = Math.max(5, line.size * 0.11);
+      coreContext.strokeText(line.text, width / 2, line.y);
+      coreContext.fillStyle = index === lines.length - 1 ? "rgba(211, 247, 255, 0.98)" : "rgba(237, 252, 255, 0.96)";
       coreContext.fillText(line.text, width / 2, line.y);
+      coreContext.strokeStyle = index === lines.length - 1 ? "rgba(76, 218, 255, 0.98)" : "rgba(169, 214, 255, 0.94)";
+      coreContext.lineWidth = Math.max(1.2, line.size * 0.025);
       coreContext.strokeText(line.text, width / 2, line.y);
     });
 
@@ -948,12 +990,17 @@
     const amount = reducedMotion ? 3 : 5;
     for (let index = 0; index < amount; index += 1) {
       babyWhales.push({
-        x: whale.x - 30 - index * 22,
-        y: whale.y + 40 + index * 14,
-        vx: 0,
-        vy: 0,
+        x: clamp(whale.x - whale.facing * (64 + index * 26), 44, width - 44),
+        y: whale.y + (index - (amount - 1) / 2) * 30,
+        vx: -whale.facing * (12 + index * 3),
+        vy: (index - (amount - 1) / 2) * 4,
         phase: Math.random() * TAU,
-        scale: 0.13 + Math.random() * 0.07,
+        swimPhase: Math.random() * TAU,
+        tilt: 0,
+        scale: 0.31 + index * 0.02 + Math.random() * 0.035,
+        hue: -12 + index * 8,
+        opacity: 0.72 + Math.random() * 0.16,
+        orbitRate: 0.00034 + index * 0.000035,
         confused: index === 1 ? 1 : 0,
         facing: 1,
       });
@@ -995,70 +1042,111 @@
       whale.targetY = lerp(height * 0.81, livingY, settle);
     }
 
-    const dx = whale.targetX - whale.x;
-    const dy = whale.targetY - whale.y;
+    const aimResponse = phase === "transition" ? 8.5 : phase === "portal" ? 4.6 : 2.7;
+    const aimBlend = 1 - Math.exp(-aimResponse * dt);
+    whale.aimX += (whale.targetX - whale.aimX) * aimBlend;
+    whale.aimY += (whale.targetY - whale.aimY) * aimBlend;
+
+    const dx = whale.aimX - whale.x;
+    const dy = whale.aimY - whale.y;
     const dist = Math.max(0.001, Math.hypot(dx, dy));
     const maxSpeed = phase === "transition"
       ? 760
       : phase === "portal"
         ? 320 + hold.progress * 170
-        : phase === "finale"
-          ? 480
-          : 265;
-    const arrival = clamp(dist / Math.max(80, Math.min(width, height) * 0.18), 0.12, 1);
-    const desiredX = (dx / dist) * maxSpeed * arrival;
-    const desiredY = (dy / dist) * maxSpeed * arrival;
-    const steer = phase === "transition" ? 5.4 : phase === "portal" ? 3.4 : 2.15;
-    whale.vx += (desiredX - whale.vx) * clamp(dt * steer, 0, 1);
-    whale.vy += (desiredY - whale.vy) * clamp(dt * steer, 0, 1);
+        : phase === "finale" || phase === "epilogue"
+          ? 360
+          : 235;
+    const arrival = clamp(dist / Math.max(95, Math.min(width, height) * 0.21), 0, 1);
+    const desiredX = dist > 1 ? (dx / dist) * maxSpeed * arrival : 0;
+    const desiredY = dist > 1 ? (dy / dist) * maxSpeed * arrival : 0;
+    const steer = phase === "transition" ? 5.8 : phase === "portal" ? 3.8 : 2.35;
+    const velocityBlend = 1 - Math.exp(-steer * dt);
+    whale.vx += (desiredX - whale.vx) * velocityBlend;
+    whale.vy += (desiredY - whale.vy) * velocityBlend;
     whale.x += whale.vx * dt;
     whale.y += whale.vy * dt;
 
     if (phase === "hunt") {
-      const marginX = whaleBodyHalfWidth();
-      const marginY = 92 * whaleScale();
+      const scale = activeWhaleScale(now);
+      const marginX = whaleBodyHalfWidth(scale);
+      const marginY = 92 * scale;
       whale.x = clamp(whale.x, marginX, width - marginX);
       whale.y = clamp(whale.y, marginY, height - marginY - 52);
     }
 
-    if (phase === "finale" || phase === "epilogue" || (phase === "transition" && now - phaseStarted > 420)) {
+    if (phase === "hunt" && currentWish?.selected) {
+      const nextFacing = currentWish.approachFacing;
+      if (nextFacing !== whale.facing) whale.trail.length = 0;
+      whale.facing = nextFacing;
+    } else if (phase === "finale" || phase === "epilogue" || (phase === "transition" && now - phaseStarted > 420)) {
       whale.facing = 1;
-    } else if (Math.abs(dx) > 22) {
-      whale.facing = dx >= 0 ? 1 : -1;
+    } else if (Math.abs(whale.vx) > 42) {
+      const nextFacing = whale.vx >= 0 ? 1 : -1;
+      if (nextFacing !== whale.facing) whale.trail.length = 0;
+      whale.facing = nextFacing;
     }
-    const desiredTilt = clamp(Math.atan2(dy, Math.max(45, Math.abs(dx))), -0.75, 0.75);
-    whale.tilt = lerp(whale.tilt, desiredTilt, clamp(dt * 2.8, 0, 1));
+    const speed = Math.hypot(whale.vx, whale.vy);
+    const desiredTilt = clamp(Math.atan2(whale.vy, Math.abs(whale.vx) + 70), -0.5, 0.5);
+    whale.tilt = lerp(whale.tilt, desiredTilt, 1 - Math.exp(-2.35 * dt));
+    const bendTarget = 0.7 + clamp(speed / 250, 0, 1) * 0.5 + clamp(Math.abs(desiredTilt - whale.tilt) * 1.4, 0, 0.35);
+    whale.bend = lerp(whale.bend, bendTarget, 1 - Math.exp(-2.8 * dt));
+    whale.swimPhase += dt * (1.55 + clamp(speed / 115, 0, 2.2));
+
+    for (let index = whale.trail.length - 1; index >= 0; index -= 1) {
+      const point = whale.trail[index];
+      point.age += dt;
+      if (point.age >= point.life) whale.trail.splice(index, 1);
+    }
     whale.trailClock += dt;
 
-    if (whale.reveal > 0.35 && whale.trailClock > (reducedMotion ? 0.09 : 0.035)) {
+    if (whale.reveal > 0.35 && speed > 22 && whale.trailClock > (reducedMotion ? 0.13 : 0.072)) {
       whale.trailClock = 0;
-      const scale = whaleScale();
-      const tailX = whale.x - whale.facing * whaleTailReach(scale);
-      const tailY = whale.y + Math.sin(now * 0.006) * 12 * scale;
-      emitParticles(tailX, tailY, reducedMotion ? 1 : 3, {
-        palette: ["#55efff", "#168cff", "#9a62ff"],
-        minSpeed: 8,
-        maxSpeed: 42,
-        vx: -whale.facing * Math.abs(whale.vx) * 0.22,
-        minLife: 0.55,
-        maxLife: 1.35,
-        minSize: 0.5,
-        maxSize: 2.1,
-        drag: 0.955,
+      const scale = activeWhaleScale(now);
+      const reach = whaleTailReach(scale);
+      const tailX = whale.x - whale.facing * Math.cos(whale.tilt) * reach;
+      const tailY = whale.y - Math.sin(whale.tilt) * reach + Math.sin(whale.swimPhase - 2.5) * 7 * scale;
+      whale.trail.push({
+        x: tailX,
+        y: tailY,
+        age: 0,
+        life: reducedMotion ? 0.72 : 1.08,
+        sparkle: Math.random() > 0.64,
       });
+      if (whale.trail.length > (reducedMotion ? 14 : 30)) whale.trail.shift();
+      if (!reducedMotion && whale.trail.length % 3 === 0) {
+        emitParticles(tailX, tailY, 1, {
+          palette: ["#55efff", "#7ea6ff", "#aa72ff"],
+          angle: Math.atan2(-whale.vy, -whale.vx),
+          spread: 0.22,
+          minSpeed: 8,
+          maxSpeed: 24,
+          vx: -whale.vx * 0.06,
+          vy: -whale.vy * 0.06,
+          minLife: 0.48,
+          maxLife: 0.78,
+          minSize: 0.32,
+          maxSize: 0.85,
+          drag: 0.96,
+        });
+      }
     }
 
     if (phase === "hunt" && currentWish?.selected) {
-      const headX = whale.x + currentWish.approachFacing * whaleHeadReach();
-      const headY = whale.y + whale.tilt * 22 * whaleScale();
+      const scale = activeWhaleScale(now);
+      const reach = whaleHeadReach(scale);
+      const headX = whale.x + whale.facing * Math.cos(whale.tilt) * reach;
+      const headY = whale.y + Math.sin(whale.tilt) * reach;
       if (
         collected === 2 &&
         !moon.hit &&
-        distance(headX, headY, moon.nx * width, moon.ny * height) < 48 * whaleScale() + 24
+        distance(headX, headY, moon.nx * width, moon.ny * height) < 48 * scale + 24
       ) {
         bumpMoon();
       }
-      if (distance(headX, headY, currentWish.x, currentWish.y) < 30 + whaleScale() * 18) {
+      const wishAtNose = distance(headX, headY, currentWish.x, currentWish.y) < 34 + scale * 22;
+      const wishWithinReach = distance(whale.x, whale.y, currentWish.x, currentWish.y) < reach + 46;
+      if (wishAtNose || wishWithinReach) {
         collectWish(now);
       }
     }
@@ -1073,9 +1161,9 @@
         targetX = comet.x - Math.sign(comet.vx) * (35 + index * 12);
         targetY = comet.y + Math.sin(now * 0.004 + baby.phase) * 26;
       } else if (phase === "finale" || phase === "epilogue") {
-        const orbit = now * (0.00024 + index * 0.000014) + baby.phase;
-        targetX = width / 2 + Math.cos(orbit * TAU) * width * (0.25 + index * 0.025);
-        targetY = height * 0.55 + Math.sin(orbit * TAU) * height * (0.16 + index * 0.01);
+        const orbit = now * baby.orbitRate + baby.phase;
+        targetX = width / 2 + Math.cos(orbit) * width * (0.25 + index * 0.025);
+        targetY = height * 0.55 + Math.sin(orbit) * height * (0.16 + index * 0.01);
       } else if (phase === "hunt" && currentWish && index % 2 === 0) {
         targetX = currentWish.x - 24 - index * 8;
         targetY = currentWish.y + Math.sin(now * 0.005 + baby.phase) * 34;
@@ -1088,13 +1176,20 @@
       }
       const dx = targetX - baby.x;
       const dy = targetY - baby.y;
-      baby.vx += dx * dt * 1.7;
-      baby.vy += dy * dt * 1.7;
-      baby.vx *= Math.pow(0.935, dt * 60);
-      baby.vy *= Math.pow(0.935, dt * 60);
+      const distanceToTarget = Math.max(0.001, Math.hypot(dx, dy));
+      const targetSpeed = clamp(distanceToTarget * 1.7, 0, phase === "finale" || phase === "epilogue" ? 190 : 150);
+      const desiredX = (dx / distanceToTarget) * targetSpeed;
+      const desiredY = (dy / distanceToTarget) * targetSpeed;
+      const velocityBlend = 1 - Math.exp(-2.7 * dt);
+      baby.vx += (desiredX - baby.vx) * velocityBlend;
+      baby.vy += (desiredY - baby.vy) * velocityBlend;
       baby.x += baby.vx * dt;
       baby.y += baby.vy * dt;
-      if (Math.abs(dx) > 5) baby.facing = dx >= 0 ? 1 : -1;
+      const speed = Math.hypot(baby.vx, baby.vy);
+      if (Math.abs(baby.vx) > 24) baby.facing = baby.vx >= 0 ? 1 : -1;
+      const desiredTilt = clamp(Math.atan2(baby.vy, Math.abs(baby.vx) + 44), -0.42, 0.42);
+      baby.tilt = lerp(baby.tilt, desiredTilt, 1 - Math.exp(-2.8 * dt));
+      baby.swimPhase += dt * (2.15 + clamp(speed / 80, 0, 2.4));
     });
   }
 
@@ -1107,6 +1202,7 @@
   function updateTitle(dt, now) {
     if (!titleParticles.length) return;
     const age = (now - phaseStarted) / 1000;
+    const timelineSettle = easeOutCubic(clamp((age - 2.2) / 1.5, 0, 1));
     for (const particle of titleParticles) {
       if (age < particle.delay) {
         particle.x += particle.vx * dt;
@@ -1122,6 +1218,12 @@
       particle.vy *= damping;
       particle.x += particle.vx * dt;
       particle.y += particle.vy * dt;
+      if (timelineSettle > 0) {
+        particle.x = lerp(particle.x, particle.tx, timelineSettle);
+        particle.y = lerp(particle.y, particle.ty, timelineSettle);
+        particle.vx *= 1 - timelineSettle;
+        particle.vy *= 1 - timelineSettle;
+      }
       particle.phase += dt * 3.5;
     }
   }
@@ -1285,7 +1387,8 @@
 
     if (phase === "portal") {
       if (hold.active) {
-        hold.progress = clamp(hold.progress + dt / (reducedMotion ? 0.9 : 1.75), 0, 1);
+        const chargeDuration = reducedMotion ? 900 : 1750;
+        hold.progress = clamp(hold.startProgress + (now - hold.startedAt) / chargeDuration, 0, 1);
         audio.updateCharge(hold.progress);
         if (hold.progress >= 1 && !hold.ready) {
           hold.ready = true;
@@ -1749,26 +1852,39 @@
     ctx.restore();
   }
 
-  function drawWhaleSprite(x, y, scale, facing, tilt, alpha, now) {
-    const sourceX = 26;
-    const sourceY = 154;
-    const sourceWidth = 1623;
-    const sourceHeight = 683;
-    const displayWidth = 420 * scale;
+  function drawSwimmingSprite({
+    image,
+    sourceX,
+    sourceY,
+    sourceWidth,
+    sourceHeight,
+    displayWidth,
+    x,
+    y,
+    facing,
+    tilt,
+    alpha,
+    swimPhase,
+    bend,
+    hue = 0,
+    slices = 24,
+    bob = 0,
+  }) {
+    if (!image.complete || !image.naturalWidth) return false;
     const displayHeight = displayWidth * (sourceHeight / sourceWidth);
-    const swim = now * 0.0056;
+    const colorFilter = hue ? `hue-rotate(${hue}deg) saturate(1.06)` : "none";
 
     ctx.save();
-    ctx.translate(x, y + Math.sin(now * 0.0017) * 4 * scale);
+    ctx.translate(x, y + Math.sin(swimPhase * 0.62) * bob);
     ctx.rotate(facing === 1 ? tilt : -tilt);
     ctx.scale(facing, 1);
 
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
-    ctx.globalAlpha = alpha * 0.2;
-    ctx.filter = `blur(${Math.max(5, 10 * scale)}px)`;
+    ctx.globalAlpha = alpha * 0.14;
+    ctx.filter = `${colorFilter === "none" ? "" : `${colorFilter} `}blur(${Math.max(4, displayWidth * 0.025)}px)`;
     ctx.drawImage(
-      whaleSprite,
+      image,
       sourceX,
       sourceY,
       sourceWidth,
@@ -1781,51 +1897,158 @@
     ctx.restore();
 
     ctx.globalCompositeOperation = "source-over";
-    ctx.globalAlpha = alpha * (reducedMotion ? 1 : 0.28);
-    ctx.drawImage(
-      whaleSprite,
-      sourceX,
-      sourceY,
-      sourceWidth,
-      sourceHeight,
-      -displayWidth / 2,
-      -displayHeight / 2,
-      displayWidth,
-      displayHeight,
-    );
+    ctx.filter = colorFilter;
 
-    if (!reducedMotion) {
-      const slices = 12;
-      ctx.globalAlpha = alpha * 0.82;
+    if (reducedMotion) {
+      ctx.globalAlpha = alpha;
+      ctx.drawImage(
+        image,
+        sourceX,
+        sourceY,
+        sourceWidth,
+        sourceHeight,
+        -displayWidth / 2,
+        -displayHeight / 2,
+        displayWidth,
+        displayHeight,
+      );
+    } else {
+      ctx.globalAlpha = alpha * 0.98;
+      const sliceSourceWidth = sourceWidth / slices;
+      const sliceDisplayWidth = displayWidth / slices;
+      const waveOffset = (normalized) => {
+        const tailInfluence = Math.pow(1 - normalized, 1.62);
+        const amplitude = (1.2 + tailInfluence * 10.2) * (displayWidth / 420) * bend;
+        return Math.sin(swimPhase - tailInfluence * 2.85) * amplitude;
+      };
       for (let index = 0; index < slices; index += 1) {
-        const normalized = index / (slices - 1);
-        const tailInfluence = Math.pow(1 - normalized, 1.75);
-        const sliceSourceWidth = sourceWidth / slices;
-        const sliceDisplayWidth = displayWidth / slices;
-        const offsetY = Math.sin(swim - tailInfluence * 2.6) * 8.5 * scale * tailInfluence;
+        const normalized = (index + 0.5) / slices;
+        const offsetY = waveOffset(normalized);
+        const previousOffset = waveOffset(clamp(normalized - 1 / slices, 0, 1));
+        const nextOffset = waveOffset(clamp(normalized + 1 / slices, 0, 1));
+        const sliceAngle = Math.atan2(nextOffset - previousOffset, sliceDisplayWidth * 2) * 0.58;
+        const destinationX = -displayWidth / 2 + index * sliceDisplayWidth;
+        ctx.save();
+        ctx.translate(destinationX + sliceDisplayWidth / 2, offsetY);
+        ctx.rotate(sliceAngle);
         ctx.drawImage(
-          whaleSprite,
+          image,
           sourceX + index * sliceSourceWidth,
           sourceY,
-          sliceSourceWidth + 2,
+          sliceSourceWidth + 3,
           sourceHeight,
-          -displayWidth / 2 + index * sliceDisplayWidth - 0.6,
-          -displayHeight / 2 + offsetY,
-          sliceDisplayWidth + 1.5,
+          -sliceDisplayWidth / 2 - 1.25,
+          -displayHeight / 2,
+          sliceDisplayWidth + 2.5,
           displayHeight,
         );
+        ctx.restore();
       }
     }
 
     ctx.restore();
+    return true;
   }
 
-  function drawWhale(x, y, scale, facing, tilt, alpha, now, constellationOnly = false) {
+  function drawWhaleSprite(x, y, scale, facing, tilt, alpha, now, swimPhase = now * 0.003, bend = 0.85) {
+    drawSwimmingSprite({
+      image: whaleSprite,
+      sourceX: 26,
+      sourceY: 154,
+      sourceWidth: 1623,
+      sourceHeight: 683,
+      displayWidth: 420 * scale,
+      x,
+      y,
+      facing,
+      tilt,
+      alpha,
+      swimPhase,
+      bend,
+      slices: 24,
+      bob: 4 * scale,
+    });
+  }
+
+  function drawWhale(x, y, scale, facing, tilt, alpha, now, constellationOnly = false, swimPhase = now * 0.003, bend = 0.85) {
     if (constellationOnly || !whaleSprite.complete || !whaleSprite.naturalWidth) {
       drawWhaleVector(x, y, scale, facing, tilt, alpha, now, constellationOnly);
       return;
     }
-    drawWhaleSprite(x, y, scale, facing, tilt, alpha, now);
+    drawWhaleSprite(x, y, scale, facing, tilt, alpha, now, swimPhase, bend);
+  }
+
+  function drawBabyWhale(baby, now) {
+    const scale = whaleScale() * baby.scale;
+    if (!babyWhaleSprite.complete || !babyWhaleSprite.naturalWidth) {
+      drawWhaleVector(baby.x, baby.y, scale * 0.78, baby.facing, baby.tilt, baby.opacity * 0.7, now, true);
+      return;
+    }
+    drawSwimmingSprite({
+      image: babyWhaleSprite,
+      sourceX: 58,
+      sourceY: 200,
+      sourceWidth: 1545,
+      sourceHeight: 579,
+      displayWidth: 330 * scale,
+      x: baby.x,
+      y: baby.y,
+      facing: baby.facing,
+      tilt: baby.tilt,
+      alpha: baby.opacity,
+      swimPhase: baby.swimPhase,
+      bend: 1.08,
+      hue: baby.hue,
+      slices: 18,
+      bob: 2.6 * scale,
+    });
+  }
+
+  function drawWhaleTrail(now) {
+    if (whale.trail.length < 2) return;
+    const first = whale.trail[0];
+    const last = whale.trail[whale.trail.length - 1];
+    const gradient = ctx.createLinearGradient(first.x, first.y, last.x, last.y);
+    gradient.addColorStop(0, "rgba(100, 86, 255, 0)");
+    gradient.addColorStop(0.45, "rgba(104, 128, 255, 0.2)");
+    gradient.addColorStop(1, "rgba(78, 235, 255, 0.62)");
+    const tracePath = () => {
+      ctx.beginPath();
+      ctx.moveTo(first.x, first.y);
+      for (let index = 1; index < whale.trail.length; index += 1) {
+        const previous = whale.trail[index - 1];
+        const point = whale.trail[index];
+        const middleX = (previous.x + point.x) / 2;
+        const middleY = (previous.y + point.y) / 2;
+        ctx.quadraticCurveTo(previous.x, previous.y, middleX, middleY);
+      }
+      ctx.lineTo(last.x, last.y);
+    };
+
+    const scale = activeWhaleScale(now);
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = gradient;
+    ctx.globalAlpha = 0.2;
+    ctx.lineWidth = Math.max(1.2, 2.35 * scale);
+    tracePath();
+    ctx.stroke();
+    ctx.globalAlpha = 0.78;
+    ctx.lineWidth = Math.max(0.48, 0.78 * scale);
+    tracePath();
+    ctx.stroke();
+    whale.trail.forEach((point, index) => {
+      if (!point.sparkle || index % 3) return;
+      const life = 1 - point.age / point.life;
+      ctx.globalAlpha = Math.max(0, life * 0.52);
+      ctx.fillStyle = index % 2 ? "#65efff" : "#a778ff";
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, 0.45 + life * 0.65, 0, TAU);
+      ctx.fill();
+    });
+    ctx.restore();
   }
 
   function drawBirth(now) {
@@ -2007,14 +2230,14 @@
     if (titleGlow && age > 0.28) {
       ctx.save();
       ctx.globalCompositeOperation = "lighter";
-      ctx.globalAlpha = clamp((age - 0.28) * 0.24, 0, 0.34);
+      ctx.globalAlpha = clamp((age - 0.28) * 0.18, 0, 0.2);
       ctx.drawImage(titleGlow, 0, 0);
       ctx.restore();
     }
-    if (titleCore && age > 0.5) {
+    if (titleCore && age > 0.42) {
       ctx.save();
-      ctx.globalCompositeOperation = "screen";
-      ctx.globalAlpha = clamp((age - 0.5) * 0.2, 0, 0.2);
+      ctx.globalCompositeOperation = "source-over";
+      ctx.globalAlpha = clamp((age - 0.42) * 0.82, 0, 0.9);
       ctx.drawImage(titleCore, 0, 0);
       ctx.restore();
     }
@@ -2038,7 +2261,7 @@
     for (let index = 0; index < titleParticles.length; index += 1) {
       const particle = titleParticles[index];
       const visible = clamp((age - particle.delay) * 2.4, 0, 1);
-      ctx.globalAlpha = visible * (0.88 + Math.sin(particle.phase) * 0.1);
+      ctx.globalAlpha = visible * (0.74 + Math.sin(particle.phase) * 0.08);
       ctx.fillStyle = index % 17 === 0 ? "#ffdca0" : index % 7 === 0 ? "#ffffff" : "#81eaff";
       const size = particle.size * (index % 17 === 0 ? 1.8 : 1);
       ctx.beginPath();
@@ -2135,17 +2358,9 @@
     drawParticles();
 
     if (phase !== "seed" && phase !== "awakening") {
+      drawWhaleTrail(now);
       babyWhales.forEach((baby) => {
-        drawWhale(
-          baby.x,
-          baby.y,
-          baby.scale,
-          baby.facing,
-          Math.sin(now * 0.001 + baby.phase) * 0.22,
-          0.56,
-          now + baby.phase * 100,
-          true,
-        );
+        drawBabyWhale(baby, now);
       });
       const transitionScale = phase === "transition"
         ? 1 + easeOutCubic(clamp(((now - phaseStarted) / 1000 - 0.45) / 1.1, 0, 1)) * 0.42
@@ -2154,12 +2369,23 @@
             ? 1.34
             : 1.05
           : 1;
-      drawWhale(whale.x, whale.y, whaleScale() * transitionScale, whale.facing, whale.tilt, whale.reveal, now);
+      drawWhale(
+        whale.x,
+        whale.y,
+        activeWhaleScale(now) * transitionScale,
+        whale.facing,
+        whale.tilt,
+        whale.reveal,
+        now,
+        false,
+        whale.swimPhase,
+        whale.bend,
+      );
     }
 
     if (phase === "finale" || phase === "epilogue") {
-      drawTitle(now);
       drawFireworks(now);
+      drawTitle(now);
     }
     drawTransition(now);
     drawProgress(now);
@@ -2172,7 +2398,7 @@
   }
 
   function frame(now) {
-    const dt = Math.min(0.033, Math.max(0.001, (now - lastFrame) / 1000));
+    const dt = Math.min(0.05, Math.max(0.001, (now - lastFrame) / 1000));
     lastFrame = now;
     update(dt, now);
     render(now);
@@ -2347,5 +2573,7 @@
   whale.y = height * 0.5;
   whale.targetX = whale.x;
   whale.targetY = whale.y;
+  whale.aimX = whale.x;
+  whale.aimY = whale.y;
   requestAnimationFrame(frame);
 })();
