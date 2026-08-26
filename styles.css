@@ -1,0 +1,245 @@
+:root {
+  color-scheme: dark;
+  --deep-space: #01030a;
+  --cyan: #55efff;
+  --blue: #168cff;
+  --violet: #9a62ff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background: var(--deep-space);
+}
+
+body {
+  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+#experience {
+  position: fixed;
+  inset: 0;
+  min-height: 100dvh;
+  isolation: isolate;
+  overflow: hidden;
+  cursor: crosshair;
+  touch-action: none;
+  -webkit-touch-callout: none;
+  background:
+    radial-gradient(circle at 50% 115%, rgba(9, 52, 94, 0.18), transparent 48%),
+    radial-gradient(circle at 50% 50%, #04091a 0%, var(--deep-space) 72%);
+}
+
+#experience.is-charging {
+  cursor: grabbing;
+}
+
+#universe,
+.art-layer,
+.art,
+.vignette,
+.grain {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.art-layer {
+  z-index: 0;
+  pointer-events: none;
+}
+
+.art {
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  opacity: 0;
+  transform: scale(1.08);
+  will-change: opacity, transform;
+  transition: opacity 1.8s ease, transform 8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.art::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: linear-gradient(180deg, rgba(1, 3, 10, 0.22), transparent 45%, rgba(1, 3, 10, 0.45));
+}
+
+.art--awakening {
+  background-image: url("assets/whale-awakening.png");
+  filter: saturate(1.18) contrast(1.08);
+  mix-blend-mode: screen;
+}
+
+.art--awakening.is-visible {
+  opacity: 0.34;
+  transform: scale(1.015);
+}
+
+.art--awakening.is-distant {
+  opacity: 0.12;
+  transform: scale(1.04);
+}
+
+.art--finale {
+  filter: blur(11px) saturate(1.35) contrast(1.05);
+  mix-blend-mode: screen;
+}
+
+.art--finale.is-visible {
+  opacity: 0.3;
+  transform: scale(1.02);
+}
+
+#universe {
+  z-index: 1;
+  display: block;
+}
+
+.vignette {
+  z-index: 2;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at center, transparent 42%, rgba(0, 2, 10, 0.3) 72%, rgba(0, 1, 6, 0.82) 100%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.34), transparent 18%, transparent 82%, rgba(0, 0, 0, 0.42));
+}
+
+.grain {
+  z-index: 3;
+  pointer-events: none;
+  opacity: 0.065;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.86' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.8'/%3E%3C/svg%3E");
+  mix-blend-mode: soft-light;
+}
+
+.prompt-wrap {
+  position: absolute;
+  z-index: 4;
+  left: 50%;
+  bottom: max(7.5vh, calc(env(safe-area-inset-bottom) + 26px));
+  width: min(88vw, 560px);
+  transform: translateX(-50%);
+  text-align: center;
+  pointer-events: none;
+}
+
+.prompt,
+.sub-prompt {
+  margin: 0;
+  color: rgba(224, 250, 255, 0.84);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  text-shadow: 0 0 16px rgba(76, 223, 255, 0.7);
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.65s ease, transform 0.65s ease;
+}
+
+.prompt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7rem;
+  font-size: clamp(0.68rem, 2.3vw, 0.82rem);
+  font-weight: 600;
+}
+
+.prompt--visible,
+.sub-prompt--visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.prompt__star {
+  color: #fff;
+  font-size: 1.15em;
+  animation: breathe 2.4s ease-in-out infinite;
+}
+
+.sub-prompt {
+  margin-top: 0.72rem;
+  color: rgba(165, 205, 222, 0.5);
+  font-size: clamp(0.55rem, 1.9vw, 0.66rem);
+  letter-spacing: 0.11em;
+  text-transform: none;
+  transition-delay: 0.18s;
+}
+
+.sub-prompt--visible {
+  opacity: 0.9;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.no-script {
+  position: absolute;
+  z-index: 10;
+  inset: 50% auto auto 50%;
+  margin: 0;
+  color: white;
+  font: 700 clamp(2rem, 8vw, 6rem) / 1.1 "Trebuchet MS", sans-serif;
+  text-align: center;
+  transform: translate(-50%, -50%);
+  text-shadow: 0 0 30px #168cff;
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.8) rotate(0deg);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.18) rotate(18deg);
+  }
+}
+
+@media (min-aspect-ratio: 4 / 3) {
+  .art {
+    background-size: min(100%, 1080px) auto;
+    background-color: #01030a;
+  }
+
+  .art--finale {
+    background-size: cover;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .art,
+  .prompt,
+  .sub-prompt {
+    transition-duration: 0.25s;
+  }
+
+  .prompt__star {
+    animation: none;
+  }
+
+  .grain {
+    display: none;
+  }
+}

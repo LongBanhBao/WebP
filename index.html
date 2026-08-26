@@ -2,16 +2,51 @@
 <html lang="vi">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>choá tín</title>
-    <style>
-      body {
-        margin: 0;
-        color: #000;
-      }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#020611" />
+    <meta
+      name="description"
+      content="Pastie – một hành trình sinh nhật tương tác giữa cá voi và ngân hà."
+    />
+    <title>Pastie — Cá voi đánh thức ngân hà</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath fill='%2355efff' d='M16 1l2.2 12.8L31 16l-12.8 2.2L16 31l-2.2-12.8L1 16l12.8-2.2z'/%3E%3C/svg%3E" />
+    <link rel="preload" as="image" href="assets/whale-awakening.png" />
+    <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    choá tín
+    <main id="experience" aria-label="Pastie – Cá voi đánh thức ngân hà">
+      <div class="art-layer" aria-hidden="true">
+        <div class="art art--awakening"></div>
+        <div class="art art--finale"></div>
+      </div>
+
+      <canvas id="universe" aria-hidden="true"></canvas>
+      <div class="vignette" aria-hidden="true"></div>
+      <div class="grain" aria-hidden="true"></div>
+
+      <div class="prompt-wrap" aria-hidden="true">
+        <p id="prompt" class="prompt prompt--visible">
+          <span class="prompt__star">✦</span>
+          <span id="promptText">Chạm vào ngôi sao</span>
+        </p>
+        <p id="subPrompt" class="sub-prompt sub-prompt--visible">
+          Âm thanh sẽ thức giấc cùng vũ trụ
+        </p>
+      </div>
+
+      <p id="liveStatus" class="sr-only" role="status" aria-live="polite">
+        Chạm vào ngôi sao đầu tiên để bắt đầu.
+      </p>
+      <p class="sr-only">
+        Trải nghiệm tương tác toàn màn hình. Dùng chuột, chạm màn hình, phím Enter hoặc
+        phím cách để đánh thức cá voi và thu thập năm ngôi sao điều ước.
+      </p>
+
+      <noscript>
+        <p class="no-script">HAPPY BIRTHDAY PASTIE ✦</p>
+      </noscript>
+    </main>
+
+    <script src="app.js"></script>
   </body>
 </html>
