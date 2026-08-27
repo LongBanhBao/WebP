@@ -67,6 +67,17 @@
   const magicQueue = [];
   const babyWhales = [];
   const comets = [];
+  const podCelebration = {
+    active: false,
+    id: 0,
+    centerNX: 0.5,
+    centerNY: 0.52,
+    total: 0,
+    arrived: 0,
+    fireworksTriggered: false,
+    startedAt: -Infinity,
+    chainEndsAt: -Infinity,
+  };
   const vortexDust = [];
   const warpStreaks = [];
   let titleCore = null;
@@ -964,9 +975,16 @@
     generateTitleParticles();
     fireworks.length = 0;
     fireworkBlooms.length = 0;
+    babyWhales.length = 0;
     zoomWhales.length = 0;
     celebrationWaves.length = 0;
     magicQueue.length = 0;
+    podCelebration.active = false;
+    podCelebration.total = 0;
+    podCelebration.arrived = 0;
+    podCelebration.fireworksTriggered = false;
+    podCelebration.startedAt = -Infinity;
+    podCelebration.chainEndsAt = -Infinity;
     interactiveFirework = 0;
     lastMagicAt = 0;
     titleMagicAt = -Infinity;
@@ -1459,9 +1477,8 @@
     }
   }
 
-  function spawnFirework(x, y, style = "burst", depth = 1) {
-    const cap = reducedMotion ? 420 : width < 700 ? 640 : 900;
-    const requested = reducedMotion
+  function requestedFireworkParticles(style, amountScale = 1) {
+    const base = reducedMotion
       ? 24
       : style === "chrysanthemum"
         ? 112
@@ -1470,11 +1487,34 @@
           : style === "burst"
             ? 78
             : 96;
+    return Math.max(1, Math.round(base * amountScale));
+  }
+
+  function reserveFireworkCapacity(requested) {
+    const cap = reducedMotion ? 420 : width < 700 ? 640 : 900;
+    const keepExisting = Math.max(0, cap - requested);
+    if (fireworks.length > keepExisting) {
+      fireworks.splice(0, fireworks.length - keepExisting);
+    }
+  }
+
+  function spawnFirework(x, y, style = "burst", depth = 1, amountScale = 1, grand = 0) {
+    const cap = reducedMotion ? 420 : width < 700 ? 640 : 900;
+    const requested = requestedFireworkParticles(style, amountScale);
     const count = Math.max(0, Math.min(requested, cap - fireworks.length));
     if (!count) return;
     const palette = COLORS.slice();
     const bloomColor = style === "chrysanthemum" ? "#ffd39a" : style === "halo" ? "#a98cff" : palette[Math.floor(Math.random() * palette.length)];
-    fireworkBlooms.push({ x, y, born: performance.now(), life: style === "halo" ? 1.35 : 0.95, color: bloomColor, depth });
+    fireworkBlooms.push({
+      x,
+      y,
+      born: performance.now(),
+      life: (style === "halo" ? 1.35 : 0.95) + grand * 0.58,
+      color: bloomColor,
+      depth,
+      grand,
+      seed: Math.random() * TAU,
+    });
     const addParticle = (vx, vy, color, size, life, gravity = 14) => {
       fireworks.push({
         x,
@@ -1551,44 +1591,157 @@
 
   function spawnWhalePod(x, y) {
     zoomWhales.length = 0;
+    for (let index = magicQueue.length - 1; index >= 0; index -= 1) {
+      if (magicQueue[index].podId) magicQueue.splice(index, 1);
+    }
+    podCelebration.id += 1;
+    podCelebration.active = true;
+    podCelebration.centerNX = x / width;
+    podCelebration.centerNY = y / height;
+    podCelebration.arrived = 0;
+    podCelebration.fireworksTriggered = false;
+    podCelebration.startedAt = performance.now();
+    podCelebration.chainEndsAt = -Infinity;
+
     const amount = reducedMotion ? 5 : width < 700 ? 8 : 10;
     const travelBase = Math.min(width, height);
+    podCelebration.total = amount;
     for (let index = 0; index < amount; index += 1) {
-      const angle = -Math.PI * 0.92 + (index / Math.max(1, amount - 1)) * Math.PI * 1.84
-        + (Math.random() - 0.5) * 0.22;
+      const angle = -Math.PI / 2 + (index / amount) * TAU + (Math.random() - 0.5) * 0.12;
       const depth = 0.72 + Math.random() * 0.48;
-      const speed = travelBase * (0.34 + Math.random() * 0.3) * depth;
-      const portraitScale = height > width ? 0.66 : 0.5;
+      const travelDuration = (reducedMotion ? 1.28 : 1.72) + index * 0.035 + Math.random() * 0.22;
+      const portraitScale = height > width ? 0.86 : 0.62;
       zoomWhales.push({
-        x: x + Math.cos(angle) * (8 + Math.random() * 18),
-        y: y + Math.sin(angle) * (5 + Math.random() * 12),
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed * 0.78 - travelBase * 0.035,
+        x: x + Math.cos(angle) * travelBase * 0.018,
+        y: y + Math.sin(angle) * travelBase * 0.012,
+        vx: 0,
+        vy: 0,
         age: 0,
-        delay: index * (reducedMotion ? 0.035 : 0.055),
-        life: 2.35 + Math.random() * 0.72,
-        startScale: 0.055 + Math.random() * 0.035,
-        endScale: portraitScale * (0.83 + depth * 0.38 + Math.random() * 0.14),
-        scale: 0.06,
+        delay: index * (reducedMotion ? 0.06 : 0.095),
+        life: travelDuration + (reducedMotion ? 1.3 : 2.05) + Math.random() * 0.28,
+        travelDuration,
+        startScale: 0.038 + Math.random() * 0.026,
+        endScale: portraitScale * (0.84 + depth * 0.34 + Math.random() * 0.12),
+        scale: 0.045,
         opacity: 0,
         depth,
-        facing: Math.cos(angle) >= 0 ? 1 : -1,
-        tilt: clamp(angle * 0.2, -0.38, 0.38),
+        podId: podCelebration.id,
+        originNX: x / width,
+        originNY: y / height,
+        baseAngle: angle,
+        turns: 1.18 + depth * 0.32 + Math.random() * 0.18,
+        radiusFactor: 0.37 + (index % 3) * 0.035 + Math.random() * 0.025,
+        spiralProgress: 0,
+        facing: 1,
+        tilt: -0.18,
         swimPhase: Math.random() * TAU,
-        bend: 1.08 + Math.random() * 0.24,
+        bend: 1.14 + Math.random() * 0.28,
         hue: -18 + index * 7,
         trail: [],
       });
     }
   }
 
-  function queueMagicBurst(now, delay, nx, ny, style, depth = 1) {
+  function launchPodFireworkChain(now) {
+    if (!podCelebration.active || podCelebration.fireworksTriggered) return;
+    podCelebration.fireworksTriggered = true;
+
+    const chainAmount = reducedMotion ? 6 : width < 700 ? 10 : 14;
+    const amountScale = reducedMotion ? 0.36 : width < 700 ? 0.44 : 0.58;
+    const interval = reducedMotion ? 155 : width < 700 ? 112 : 92;
+    const chainBudget = reducedMotion ? 160 : width < 700 ? 480 : 810;
+    reserveFireworkCapacity(chainBudget);
+
+    screenFlash = Math.max(screenFlash, reducedMotion ? 0.32 : 0.72);
+    cameraKick = Math.max(cameraKick, reducedMotion ? 0 : 0.58);
+    titleMagicAt = now;
+    whale.finalReactionAt = now;
+    whale.finalReactionKind = "pod";
+    const centerX = podCelebration.centerNX * width;
+    const centerY = podCelebration.centerNY * height;
+    [0, 120, 260].forEach((delay, index) => {
+      celebrationWaves.push({
+        x: centerX,
+        y: centerY,
+        born: now + delay,
+        life: 1.45 + index * 0.22,
+        style: "pod",
+        color: index === 2 ? "#ffd69a" : index === 1 ? "#d28cff" : "#83f5ff",
+        index,
+      });
+    });
+    emitParticles(centerX, centerY, reducedMotion ? 42 : width < 700 ? 92 : 154, {
+      minSpeed: 90,
+      maxSpeed: 360,
+      minLife: 0.9,
+      maxLife: 2.5,
+      palette: ["#ffffff", "#75f2ff", "#9c7bff", "#ff8fcf", "#ffdda7"],
+    });
+
+    const anchors = zoomWhales
+      .filter((item) => item.podId === podCelebration.id && item.spiralProgress >= 0.6)
+      .sort((first, second) => second.spiralProgress - first.spiralProgress);
+    const styles = ["chrysanthemum", "spiral", "burst", "halo", "tail"];
+    for (let index = 0; index < chainAmount; index += 1) {
+      const anchor = anchors[index % Math.max(1, anchors.length)];
+      const orbit = -Math.PI / 2 + index * 2.399963;
+      const fallbackNX = 0.5 + Math.cos(orbit) * (0.27 + (index % 3) * 0.035);
+      const fallbackNY = 0.43 + Math.sin(orbit) * (height > width ? 0.29 : 0.33);
+      const anchorNX = anchor ? anchor.x / width : fallbackNX;
+      const anchorNY = anchor ? anchor.y / height : fallbackNY;
+      const nx = lerp(anchorNX, fallbackNX, index < anchors.length ? 0.42 : 0.74);
+      const ny = lerp(anchorNY, fallbackNY, index < anchors.length ? 0.4 : 0.74);
+      queueMagicBurst(
+        now,
+        index * interval,
+        nx,
+        ny,
+        styles[index % styles.length],
+        0.82 + (index % 4) * 0.1,
+        {
+          amountScale: index === chainAmount - 1 ? amountScale * 1.28 : amountScale,
+          priority: true,
+          chime: index % 3 === 0 ? index % 5 : -1,
+          podId: podCelebration.id,
+          grand: 0.72 + (index % 4) * 0.18,
+        },
+      );
+    }
+
+    const finalDelay = chainAmount * interval + 140;
+    [0.25, 0.5, 0.75].forEach((nx, index) => {
+      queueMagicBurst(now, finalDelay + index * 90, nx, index === 1 ? 0.1 : 0.15, "chrysanthemum", 1.08 + index * 0.05, {
+        amountScale: amountScale * 1.18,
+        priority: true,
+        chime: index === 1 ? 4 : -1,
+        podId: podCelebration.id,
+        grand: 1.45,
+      });
+    });
+    queueMagicBurst(now, finalDelay + 330, 0.5, 0.82, "halo", 1.22, {
+      amountScale: amountScale * 1.42,
+      priority: true,
+      chime: 4,
+      podId: podCelebration.id,
+      grand: 1.72,
+    });
+    podCelebration.chainEndsAt = now + finalDelay + 2350;
+    audio.whaleCall();
+    setPrompt("Cả đàn cá voi đã tới", "Pháo hoa đang chạy xuyên ngân hà", 2400);
+  }
+
+  function queueMagicBurst(now, delay, nx, ny, style, depth = 1, options = {}) {
     magicQueue.push({
       at: now + delay,
       nx: clamp(nx, 0.04, 0.96),
       ny: clamp(ny, 0.08, 0.9),
       style,
       depth,
+      amountScale: options.amountScale ?? 1,
+      priority: Boolean(options.priority),
+      chime: options.chime ?? -1,
+      podId: options.podId ?? 0,
+      grand: options.grand ?? 0,
     });
   }
 
@@ -1596,7 +1749,22 @@
     for (let index = magicQueue.length - 1; index >= 0; index -= 1) {
       const event = magicQueue[index];
       if (now < event.at) continue;
-      spawnFirework(event.nx * width, event.ny * height, event.style, event.depth);
+      if (event.podId && event.podId !== podCelebration.id) {
+        magicQueue.splice(index, 1);
+        continue;
+      }
+      if (event.priority) {
+        reserveFireworkCapacity(requestedFireworkParticles(event.style, event.amountScale));
+      }
+      spawnFirework(
+        event.nx * width,
+        event.ny * height,
+        event.style,
+        event.depth,
+        event.amountScale,
+        event.grand,
+      );
+      if (event.chime >= 0) audio.chime(event.chime);
       magicQueue.splice(index, 1);
     }
 
@@ -1607,12 +1775,12 @@
   }
 
   function triggerPastieMagic(style, x, y, now) {
-    const particleCap = reducedMotion ? 420 : width < 700 ? 640 : 900;
-    const reserved = reducedMotion ? 105 : style === "spiral" ? 380 : style === "tail" ? 330 : 320;
-    const keepExisting = Math.max(0, particleCap - reserved);
-    if (fireworks.length > keepExisting) {
-      fireworks.splice(0, fireworks.length - keepExisting);
-    }
+    const reserved = reducedMotion
+      ? style === "pod" ? 60 : 105
+      : style === "pod"
+        ? width < 700 ? 110 : 150
+        : style === "spiral" ? 380 : 330;
+    reserveFireworkCapacity(reserved);
     titleMagicAt = now;
     whale.finalReactionAt = now;
     whale.finalReactionKind = style;
@@ -1645,14 +1813,14 @@
       queueMagicBurst(now, 230, nx - 0.2, ny + 0.03, "spiral", 0.82);
       queueMagicBurst(now, 360, nx + 0.2, ny - 0.04, "spiral", 0.9);
     } else {
-      spawnFirework(x, y, "halo", 1.24);
       spawnWhalePod(x, y);
-      queueMagicBurst(now, 210, nx - 0.24, ny - 0.08, "chrysanthemum", 0.92);
-      queueMagicBurst(now, 390, nx + 0.24, ny - 0.11, "chrysanthemum", 1.02);
-      audio.whaleCall();
+      spawnFirework(x, y, "halo", 0.92, reducedMotion ? 0.28 : 0.38);
     }
 
-    emitParticles(x, y, reducedMotion ? 38 : width < 700 ? 78 : 126, {
+    const magicParticleCount = style === "pod"
+      ? reducedMotion ? 24 : width < 700 ? 48 : 76
+      : reducedMotion ? 38 : width < 700 ? 78 : 126;
+    emitParticles(x, y, magicParticleCount, {
       minSpeed: 48,
       maxSpeed: style === "pod" ? 310 : 245,
       minLife: 0.8,
@@ -1706,21 +1874,39 @@
       item.age += dt;
       const localAge = item.age - item.delay;
       if (localAge < 0) continue;
-      if (localAge >= item.life) {
+      if (item.podId !== podCelebration.id || localAge >= item.life) {
         zoomWhales.splice(index, 1);
         continue;
       }
-      const progress = clamp(localAge / item.life, 0, 1);
-      const scaleProgress = easeOutCubic(clamp(localAge / (item.life * 0.62), 0, 1));
-      item.scale = lerp(item.startScale, item.endScale, scaleProgress);
-      item.opacity = clamp(localAge / 0.16, 0, 1) * clamp((1 - progress) / 0.24, 0, 1) * (0.76 + item.depth * 0.18);
-      item.vx *= Math.pow(0.987, dt * 60);
-      item.vy = item.vy * Math.pow(0.989, dt * 60) - 4 * dt;
-      item.x += item.vx * dt;
-      item.y += item.vy * dt;
-      item.facing = item.vx >= 0 ? 1 : -1;
+      const progress = clamp(localAge / item.travelDuration, 0, 1);
+      const eased = easeInOutCubic(progress);
+      const perspective = Math.pow(easeOutCubic(progress), 1.22);
+      const afterTravel = Math.max(0, localAge - item.travelDuration);
+      const shortSide = Math.min(width, height);
+      const portrait = height > width;
+      const angle = item.baseAngle + TAU * item.turns * eased + afterTravel * 0.22;
+      const radius = shortSide * (
+        lerp(0.018, item.radiusFactor, easeOutCubic(progress))
+        + afterTravel * 0.028
+      );
+      const centerX = item.originNX * width;
+      const centerY = item.originNY * height;
+      const nextX = centerX + Math.cos(angle) * radius * (portrait ? 0.78 : 1.16);
+      const nextY = centerY + Math.sin(angle) * radius * (portrait ? 1.04 : 0.64)
+        - shortSide * (0.052 * progress + afterTravel * 0.018);
+      const safeDt = Math.max(0.001, dt);
+      item.vx = (nextX - item.x) / safeDt;
+      item.vy = (nextY - item.y) / safeDt;
+      item.x = nextX;
+      item.y = nextY;
+      item.spiralProgress = progress;
+      item.scale = lerp(item.startScale, item.endScale, perspective) * (1 + Math.min(0.12, afterTravel * 0.045));
+      const fadeDuration = reducedMotion ? 0.46 : 0.82;
+      const fade = 1 - easeOutCubic(clamp((localAge - (item.life - fadeDuration)) / fadeDuration, 0, 1));
+      item.opacity = clamp(localAge / 0.18, 0, 1) * fade * (0.78 + item.depth * 0.17);
+      if (Math.abs(item.vx) > 8) item.facing = item.vx >= 0 ? 1 : -1;
       item.tilt = lerp(item.tilt, clamp(Math.atan2(item.vy, Math.abs(item.vx) + 80) * 0.58, -0.42, 0.42), 1 - Math.exp(-4.2 * dt));
-      item.swimPhase += dt * (3.4 + item.depth * 1.9);
+      item.swimPhase += dt * (4 + item.depth * 2.1 + progress * 0.8);
       if (!reducedMotion) {
         const tailReach = 150 * whaleScale() * item.scale;
         const spriteRotation = item.facing === 1 ? item.tilt : -item.tilt;
@@ -1730,6 +1916,28 @@
           y: item.y + Math.sin(spriteRotation) * localTailX,
         });
         if (item.trail.length > 12) item.trail.pop();
+      }
+    }
+
+    if (podCelebration.active) {
+      const currentPod = zoomWhales.filter((item) => item.podId === podCelebration.id);
+      podCelebration.arrived = currentPod.filter((item) => (
+        item.spiralProgress >= 0.74
+        && item.opacity >= 0.65
+        && item.scale / item.endScale >= 0.72
+      )).length;
+      if (
+        !podCelebration.fireworksTriggered
+        && podCelebration.arrived >= Math.ceil(podCelebration.total * 0.75)
+      ) {
+        launchPodFireworkChain(now);
+      }
+      if (
+        podCelebration.fireworksTriggered
+        && !currentPod.length
+        && now >= podCelebration.chainEndsAt
+      ) {
+        podCelebration.active = false;
       }
     }
 
@@ -2997,7 +3205,11 @@
       if (layer !== "all" && (layer === "near") !== isNear) continue;
       const progress = clamp((now - bloom.born) / (bloom.life * 1000), 0, 1);
       const life = 1 - progress;
-      const radius = easeOutCubic(progress) * (34 + bloom.depth * 42);
+      const grand = bloom.grand || 0;
+      const radius = easeOutCubic(progress) * (
+        (34 + bloom.depth * 42) * (1 + grand * 0.46)
+        + Math.min(width, height) * grand * 0.035
+      );
       const glow = ctx.createRadialGradient(bloom.x, bloom.y, 0, bloom.x, bloom.y, Math.max(1, radius));
       glow.addColorStop(0, `rgba(255, 255, 255, ${life * 0.9})`);
       glow.addColorStop(0.16, bloom.color);
@@ -3013,6 +3225,44 @@
       ctx.beginPath();
       ctx.arc(bloom.x, bloom.y, radius * 1.18, 0, TAU);
       ctx.stroke();
+
+      if (grand > 0.01) {
+        const rayCount = reducedMotion ? 10 : 18 + Math.round(grand * 5);
+        ctx.lineCap = "round";
+        for (let index = 0; index < rayCount; index += 1) {
+          const angle = bloom.seed + (index / rayCount) * TAU + Math.sin(index * 2.37) * 0.035;
+          const variance = 0.72 + ((index * 7) % 9) * 0.045;
+          const innerRadius = radius * (0.2 + (index % 3) * 0.035);
+          const outerRadius = radius * variance;
+          const endX = bloom.x + Math.cos(angle) * outerRadius;
+          const endY = bloom.y + Math.sin(angle) * outerRadius;
+          ctx.globalAlpha = life * (isNear ? 0.82 : 0.56) * (0.68 + grand * 0.16);
+          ctx.strokeStyle = index % 7 === 0 ? "#ffd9a0" : index % 3 === 0 ? "#d997ff" : bloom.color;
+          ctx.lineWidth = 0.55 + (index % 4 === 0 ? grand * 0.68 : grand * 0.22);
+          ctx.beginPath();
+          ctx.moveTo(
+            bloom.x + Math.cos(angle) * innerRadius,
+            bloom.y + Math.sin(angle) * innerRadius,
+          );
+          ctx.lineTo(endX, endY);
+          ctx.stroke();
+          if (index % 3 === 0) {
+            ctx.fillStyle = index % 2 ? "#ffffff" : "#8ff5ff";
+            ctx.beginPath();
+            ctx.arc(endX, endY, 0.75 + grand * 0.42, 0, TAU);
+            ctx.fill();
+          }
+        }
+        ctx.globalAlpha = life * 0.42;
+        ctx.strokeStyle = grand > 1.2 ? "#fff1cf" : bloom.color;
+        ctx.lineWidth = 0.65 + grand * 0.35;
+        ctx.beginPath();
+        ctx.arc(bloom.x, bloom.y, radius * 0.58, 0, TAU);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(bloom.x, bloom.y, radius * 1.34, 0, TAU);
+        ctx.stroke();
+      }
     }
     for (const particle of fireworks) {
       const isNear = particle.depth >= 0.95;
@@ -3137,6 +3387,79 @@
         }
       }
     }
+    ctx.restore();
+  }
+
+  function drawPodSpiralGateway(now) {
+    if (!podCelebration.active) return;
+    const age = Math.max(0, (now - podCelebration.startedAt) / 1000);
+    const build = easeOutCubic(clamp(age / 1.35, 0, 1));
+    const chainFade = podCelebration.fireworksTriggered
+      ? clamp((podCelebration.chainEndsAt - now) / 1700, 0.18, 1)
+      : 1;
+    const centerX = podCelebration.centerNX * width;
+    const centerY = podCelebration.centerNY * height;
+    const shortSide = Math.min(width, height);
+    const portrait = height > width;
+    const radius = shortSide * (0.055 + build * 0.31);
+    const rotation = now * 0.00062;
+
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.lineCap = "round";
+    const spiralGradient = ctx.createLinearGradient(
+      centerX - radius,
+      centerY - radius,
+      centerX + radius,
+      centerY + radius,
+    );
+    spiralGradient.addColorStop(0, "rgba(72, 219, 255, 0.08)");
+    spiralGradient.addColorStop(0.45, "rgba(111, 239, 255, 0.78)");
+    spiralGradient.addColorStop(0.72, "rgba(186, 111, 255, 0.62)");
+    spiralGradient.addColorStop(1, "rgba(255, 204, 151, 0.08)");
+    ctx.strokeStyle = spiralGradient;
+    for (let arm = 0; arm < 3; arm += 1) {
+      ctx.globalAlpha = (0.2 + arm * 0.065) * build * chainFade;
+      ctx.lineWidth = 0.75 + arm * 0.42;
+      ctx.beginPath();
+      for (let step = 0; step <= 58; step += 1) {
+        const local = step / 58;
+        const angle = rotation + arm * TAU / 3 + local * TAU * 1.62;
+        const localRadius = radius * (0.05 + local * 0.95);
+        const x = centerX + Math.cos(angle) * localRadius * (portrait ? 0.78 : 1.14);
+        const y = centerY + Math.sin(angle) * localRadius * (portrait ? 1.02 : 0.62);
+        if (!step) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+
+    const moteCount = reducedMotion ? 10 : 24;
+    for (let index = 0; index < moteCount; index += 1) {
+      const local = ((index / moteCount) + age * (0.055 + (index % 3) * 0.009)) % 1;
+      const angle = rotation + (index % 3) * TAU / 3 + local * TAU * 1.62;
+      const localRadius = radius * (0.06 + local * 0.94);
+      const x = centerX + Math.cos(angle) * localRadius * (portrait ? 0.78 : 1.14);
+      const y = centerY + Math.sin(angle) * localRadius * (portrait ? 1.02 : 0.62);
+      const pulse = 0.45 + Math.sin(now * 0.0024 + index * 1.7) * 0.32;
+      ctx.globalAlpha = Math.max(0.08, pulse) * build * chainFade;
+      ctx.fillStyle = index % 5 === 0 ? "#ffd9a7" : index % 3 === 0 ? "#cb8dff" : "#8ff6ff";
+      ctx.beginPath();
+      ctx.arc(x, y, index % 5 === 0 ? 1.45 : 0.78, 0, TAU);
+      ctx.fill();
+    }
+
+    const coreRadius = shortSide * (0.025 + build * 0.035);
+    const core = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, coreRadius);
+    core.addColorStop(0, `rgba(255, 255, 255, ${0.72 * chainFade})`);
+    core.addColorStop(0.22, `rgba(84, 238, 255, ${0.52 * chainFade})`);
+    core.addColorStop(0.62, `rgba(149, 94, 255, ${0.2 * chainFade})`);
+    core.addColorStop(1, "rgba(0, 0, 0, 0)");
+    ctx.globalAlpha = build;
+    ctx.fillStyle = core;
+    ctx.beginPath();
+    ctx.ellipse(centerX, centerY, coreRadius * 1.45, coreRadius, -0.12, 0, TAU);
+    ctx.fill();
     ctx.restore();
   }
 
@@ -3283,9 +3606,11 @@
         now,
         sanctumIntensity,
       );
-      babyWhales.forEach((baby) => {
-        drawBabyWhale(baby, now);
-      });
+      if (phase !== "finale" && phase !== "epilogue") {
+        babyWhales.forEach((baby) => {
+          drawBabyWhale(baby, now);
+        });
+      }
       drawWhale(
         whale.x,
         whale.y,
@@ -3303,6 +3628,7 @@
 
     if (phase === "finale" || phase === "epilogue") {
       drawCelebrationWaves(now);
+      drawPodSpiralGateway(now);
       drawZoomWhales(now);
       drawTitle(now);
       drawFinaleForeground(now);
@@ -3467,6 +3793,8 @@
       });
       if (Number.isFinite(titleMagicAt)) titleMagicAt += hiddenDuration;
       if (Number.isFinite(whale.finalReactionAt)) whale.finalReactionAt += hiddenDuration;
+      if (Number.isFinite(podCelebration.startedAt)) podCelebration.startedAt += hiddenDuration;
+      if (Number.isFinite(podCelebration.chainEndsAt)) podCelebration.chainEndsAt += hiddenDuration;
       if (lastMagicAt) lastMagicAt += hiddenDuration;
       lastCometAt += hiddenDuration;
       hiddenAt = 0;
