@@ -49,6 +49,7 @@
   let cameraKick = 0;
   let interactiveFirework = 0;
   let lastMagicAt = 0;
+  let titleMagicAt = -Infinity;
   let lastCometAt = 0;
   let hiddenAt = 0;
   let promptTimer = 0;
@@ -62,6 +63,8 @@
   const fireworks = [];
   const fireworkBlooms = [];
   const zoomWhales = [];
+  const celebrationWaves = [];
+  const magicQueue = [];
   const babyWhales = [];
   const comets = [];
   const vortexDust = [];
@@ -110,6 +113,8 @@
     trail: [],
     swimPhase: 0,
     bend: 0.8,
+    finalReactionAt: -Infinity,
+    finalReactionKind: "tail",
   };
 
   const wishMap = [
@@ -364,9 +369,23 @@
       bloom.x *= sx;
       bloom.y *= sy;
     });
-    [...zoomWhales, ...comets].forEach((item) => {
+    zoomWhales.forEach((item) => {
       item.x *= sx;
       item.y *= sy;
+      item.vx *= sx;
+      item.vy *= sy;
+      item.trail.forEach((point) => {
+        point.x *= sx;
+        point.y *= sy;
+      });
+    });
+    comets.forEach((item) => {
+      item.x *= sx;
+      item.y *= sy;
+    });
+    celebrationWaves.forEach((wave) => {
+      wave.x *= sx;
+      wave.y *= sy;
     });
     seed.x = width * 0.5;
     seed.y = height * 0.53;
@@ -640,6 +659,19 @@
     return base;
   }
 
+  function finaleWhaleReaction(now = performance.now()) {
+    const duration = whale.finalReactionKind === "pod" ? 1.65 : whale.finalReactionKind === "spiral" ? 1.35 : 1.05;
+    const elapsed = (now - whale.finalReactionAt) / 1000;
+    const active = elapsed >= 0 && elapsed < duration;
+    const progress = active ? clamp(elapsed / duration, 0, 1) : 1;
+    return {
+      active,
+      kind: whale.finalReactionKind,
+      progress,
+      envelope: active ? Math.sin(progress * Math.PI) : 0,
+    };
+  }
+
   function whaleRenderScale(now = performance.now()) {
     const active = activeWhaleScale(now);
     if (phase === "transition") {
@@ -652,7 +684,10 @@
         ? width * 1.11
         : Math.min(width * 0.68, height * 1.03);
       const entrance = lerp(0.84, 1, easeOutCubic(clamp((now - phaseStarted) / 2300, 0, 1)));
-      return (targetWidth / 420) * entrance;
+      const reaction = finaleWhaleReaction(now);
+      const breathing = Math.sin(now * 0.00115) * (reducedMotion ? 0.004 : 0.011);
+      const reactionScale = reaction.envelope * (reaction.kind === "pod" ? 0.026 : 0.016);
+      return (targetWidth / 420) * entrance * (1 + breathing + reactionScale);
     }
     return active;
   }
@@ -929,6 +964,12 @@
     generateTitleParticles();
     fireworks.length = 0;
     fireworkBlooms.length = 0;
+    zoomWhales.length = 0;
+    celebrationWaves.length = 0;
+    magicQueue.length = 0;
+    interactiveFirework = 0;
+    lastMagicAt = 0;
+    titleMagicAt = -Infinity;
     finaleEvents.forEach((event) => {
       event.played = false;
     });
@@ -942,6 +983,8 @@
     whale.aimY = whale.y;
     whale.facing = 1;
     whale.reveal = 1;
+    whale.finalReactionAt = -Infinity;
+    whale.finalReactionKind = "tail";
     whale.trail.length = 0;
     emitParticles(portal.x, portal.y, reducedMotion ? 85 : 240, {
       minSpeed: 110,
@@ -1185,8 +1228,25 @@
         scriptedTilt = clamp(Math.atan2(tangentY, Math.max(80, Math.abs(tangentX))) * 0.72, -0.3, 0.2);
         scriptedFinale = true;
       } else {
-        const livingX = guardianX + Math.cos(now * 0.00032) * width * 0.018;
-        const livingY = guardianY + Math.sin(now * 0.00043) * height * 0.009;
+        const orbit = now * 0.00042;
+        const amplitudeX = portrait ? Math.min(18, width * 0.045) : Math.min(58, width * 0.04);
+        const amplitudeY = portrait ? Math.min(9, height * 0.011) : Math.min(18, height * 0.02);
+        let livingX = guardianX + Math.sin(orbit) * amplitudeX;
+        let livingY = guardianY + Math.sin(orbit * 2 + 0.65) * amplitudeY;
+        const reaction = finaleWhaleReaction(now);
+        if (reaction.active) {
+          const motion = reducedMotion ? reaction.envelope * 0.22 : reaction.envelope;
+          if (reaction.kind === "tail") {
+            livingX -= width * (portrait ? 0.035 : 0.026) * motion;
+            livingY += height * 0.012 * motion;
+          } else if (reaction.kind === "spiral") {
+            livingX += Math.sin(reaction.progress * TAU) * amplitudeX * 1.55 * motion;
+            livingY += Math.cos(reaction.progress * TAU) * amplitudeY * 1.35 * motion;
+          } else {
+            livingX -= width * 0.012 * motion;
+            livingY -= height * (portrait ? 0.017 : 0.026) * motion;
+          }
+        }
         whale.targetX = livingX;
         whale.targetY = livingY;
       }
@@ -1239,13 +1299,29 @@
       whale.facing = nextFacing;
     }
     const speed = Math.hypot(whale.vx, whale.vy);
-    const desiredTilt = clamp(Math.atan2(whale.vy, Math.abs(whale.vx) + 70), -0.5, 0.5);
+    const reaction = finaleWhaleReaction(now);
+    let finaleTilt = 0;
+    if (phase === "finale" || phase === "epilogue") {
+      finaleTilt = Math.sin(now * 0.00052) * (reducedMotion ? 0.012 : 0.045);
+      if (reaction.active) {
+        if (reaction.kind === "tail") finaleTilt -= reaction.envelope * (reducedMotion ? 0.025 : 0.075);
+        else if (reaction.kind === "spiral") finaleTilt += Math.sin(reaction.progress * TAU) * reaction.envelope * (reducedMotion ? 0.035 : 0.13);
+        else finaleTilt -= reaction.envelope * (reducedMotion ? 0.035 : 0.105);
+      }
+    }
+    const desiredTilt = clamp(Math.atan2(whale.vy, Math.abs(whale.vx) + 70) + finaleTilt, -0.5, 0.5);
     whale.tilt = scriptedFinale
       ? lerp(whale.tilt, scriptedTilt, 1 - Math.exp(-6.5 * dt))
       : lerp(whale.tilt, desiredTilt, 1 - Math.exp(-2.35 * dt));
-    const bendTarget = 0.7 + clamp(speed / 250, 0, 1) * 0.5 + clamp(Math.abs(desiredTilt - whale.tilt) * 1.4, 0, 0.35);
+    const finaleFlex = phase === "finale" || phase === "epilogue"
+      ? 0.24 + Math.sin(now * 0.00145) * 0.065 + reaction.envelope * (reaction.kind === "tail" ? 0.56 : reaction.kind === "spiral" ? 0.34 : 0.26)
+      : 0;
+    const bendTarget = 0.7 + finaleFlex + clamp(speed / 250, 0, 1) * 0.5 + clamp(Math.abs(desiredTilt - whale.tilt) * 1.4, 0, 0.35);
     whale.bend = lerp(whale.bend, bendTarget, 1 - Math.exp(-2.8 * dt));
-    whale.swimPhase += dt * (0.9 + clamp(speed / 150, 0, 1.25));
+    const swimRate = phase === "finale" || phase === "epilogue"
+      ? 1.24 + clamp(speed / 180, 0, 0.62) + reaction.envelope * (reaction.kind === "tail" ? 0.92 : 0.48)
+      : 0.9 + clamp(speed / 150, 0, 1.25);
+    whale.swimPhase += dt * swimRate;
 
     for (let index = whale.trail.length - 1; index >= 0; index -= 1) {
       const point = whale.trail[index];
@@ -1254,7 +1330,8 @@
     }
     whale.trailClock += dt;
 
-    if (whale.reveal > 0.35 && speed > 22 && whale.trailClock > (reducedMotion ? 0.13 : 0.072)) {
+    const finaleTrail = phase === "finale" || phase === "epilogue";
+    if (whale.reveal > 0.35 && speed > (finaleTrail ? 4 : 22) && whale.trailClock > (reducedMotion ? 0.13 : 0.072)) {
       whale.trailClock = 0;
       const scale = whaleRenderScale(now);
       const reach = whaleTailReach(scale);
@@ -1264,7 +1341,7 @@
         x: tailX,
         y: tailY,
         age: 0,
-        life: reducedMotion ? 0.72 : 1.08,
+        life: reducedMotion ? 0.72 : finaleTrail ? 1.34 : 1.08,
         sparkle: Math.random() > 0.64,
       });
       if (whale.trail.length > (reducedMotion ? 14 : 30)) whale.trail.shift();
@@ -1473,18 +1550,115 @@
   }
 
   function spawnWhalePod(x, y) {
-    const amount = Math.max(0, Math.min(reducedMotion ? 4 : 8, 28 - zoomWhales.length));
+    zoomWhales.length = 0;
+    const amount = reducedMotion ? 5 : width < 700 ? 8 : 10;
+    const travelBase = Math.min(width, height);
     for (let index = 0; index < amount; index += 1) {
+      const angle = -Math.PI * 0.92 + (index / Math.max(1, amount - 1)) * Math.PI * 1.84
+        + (Math.random() - 0.5) * 0.22;
+      const depth = 0.72 + Math.random() * 0.48;
+      const speed = travelBase * (0.34 + Math.random() * 0.3) * depth;
+      const portraitScale = height > width ? 0.66 : 0.5;
       zoomWhales.push({
-        x: x + (Math.random() - 0.5) * width * 0.45,
-        y: y + (Math.random() - 0.5) * height * 0.3,
+        x: x + Math.cos(angle) * (8 + Math.random() * 18),
+        y: y + Math.sin(angle) * (5 + Math.random() * 12),
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed * 0.78 - travelBase * 0.035,
         age: 0,
-        life: 1.6 + Math.random() * 0.8,
-        scale: 0.04 + Math.random() * 0.06,
-        speed: 0.4 + Math.random() * 0.65,
-        facing: Math.random() > 0.5 ? 1 : -1,
+        delay: index * (reducedMotion ? 0.035 : 0.055),
+        life: 2.35 + Math.random() * 0.72,
+        startScale: 0.055 + Math.random() * 0.035,
+        endScale: portraitScale * (0.83 + depth * 0.38 + Math.random() * 0.14),
+        scale: 0.06,
+        opacity: 0,
+        depth,
+        facing: Math.cos(angle) >= 0 ? 1 : -1,
+        tilt: clamp(angle * 0.2, -0.38, 0.38),
+        swimPhase: Math.random() * TAU,
+        bend: 1.08 + Math.random() * 0.24,
+        hue: -18 + index * 7,
+        trail: [],
       });
     }
+  }
+
+  function queueMagicBurst(now, delay, nx, ny, style, depth = 1) {
+    magicQueue.push({
+      at: now + delay,
+      nx: clamp(nx, 0.04, 0.96),
+      ny: clamp(ny, 0.08, 0.9),
+      style,
+      depth,
+    });
+  }
+
+  function updateMagicQueue(now) {
+    for (let index = magicQueue.length - 1; index >= 0; index -= 1) {
+      const event = magicQueue[index];
+      if (now < event.at) continue;
+      spawnFirework(event.nx * width, event.ny * height, event.style, event.depth);
+      magicQueue.splice(index, 1);
+    }
+
+    for (let index = celebrationWaves.length - 1; index >= 0; index -= 1) {
+      const wave = celebrationWaves[index];
+      if (now - wave.born > wave.life * 1000) celebrationWaves.splice(index, 1);
+    }
+  }
+
+  function triggerPastieMagic(style, x, y, now) {
+    const particleCap = reducedMotion ? 420 : width < 700 ? 640 : 900;
+    const reserved = reducedMotion ? 105 : style === "spiral" ? 380 : style === "tail" ? 330 : 320;
+    const keepExisting = Math.max(0, particleCap - reserved);
+    if (fireworks.length > keepExisting) {
+      fireworks.splice(0, fireworks.length - keepExisting);
+    }
+    titleMagicAt = now;
+    whale.finalReactionAt = now;
+    whale.finalReactionKind = style;
+    const force = style === "pod" ? 1 : style === "spiral" ? 0.82 : 0.68;
+    screenFlash = Math.max(screenFlash, reducedMotion ? 0.22 : 0.34 + force * 0.2);
+    cameraKick = Math.max(cameraKick, reducedMotion ? 0 : 0.14 + force * 0.2);
+
+    [0, 95, 210].forEach((delay, index) => {
+      addRipple(x, y, COLORS[(interactiveFirework + index) % COLORS.length], delay, 0.72 + force * 0.5 + index * 0.16);
+      celebrationWaves.push({
+        x,
+        y,
+        born: now + delay,
+        life: 1.1 + index * 0.2 + force * 0.28,
+        style,
+        color: index === 2 ? "#ffd69a" : index === 1 ? "#c486ff" : "#70efff",
+        index,
+      });
+    });
+
+    const nx = x / width;
+    const ny = y / height;
+    if (style === "tail") {
+      spawnFirework(x, y, "tail", 1.22);
+      queueMagicBurst(now, 170, nx - 0.22, ny - 0.1, "chrysanthemum", 0.88);
+      queueMagicBurst(now, 310, nx + 0.22, ny - 0.12, "chrysanthemum", 0.94);
+    } else if (style === "spiral") {
+      spawnFirework(x, y, "spiral", 1.24);
+      queueMagicBurst(now, 90, nx, ny, "halo", 1.08);
+      queueMagicBurst(now, 230, nx - 0.2, ny + 0.03, "spiral", 0.82);
+      queueMagicBurst(now, 360, nx + 0.2, ny - 0.04, "spiral", 0.9);
+    } else {
+      spawnFirework(x, y, "halo", 1.24);
+      spawnWhalePod(x, y);
+      queueMagicBurst(now, 210, nx - 0.24, ny - 0.08, "chrysanthemum", 0.92);
+      queueMagicBurst(now, 390, nx + 0.24, ny - 0.11, "chrysanthemum", 1.02);
+      audio.whaleCall();
+    }
+
+    emitParticles(x, y, reducedMotion ? 38 : width < 700 ? 78 : 126, {
+      minSpeed: 48,
+      maxSpeed: style === "pod" ? 310 : 245,
+      minLife: 0.8,
+      maxLife: 2.2,
+      palette: ["#ffffff", "#6cefff", "#a477ff", "#ff8ed0", "#ffd49b"],
+    });
   }
 
   function spawnComet() {
@@ -1530,9 +1704,33 @@
     for (let index = zoomWhales.length - 1; index >= 0; index -= 1) {
       const item = zoomWhales[index];
       item.age += dt;
-      item.scale += dt * item.speed;
-      item.y -= dt * 25;
-      if (item.age >= item.life) zoomWhales.splice(index, 1);
+      const localAge = item.age - item.delay;
+      if (localAge < 0) continue;
+      if (localAge >= item.life) {
+        zoomWhales.splice(index, 1);
+        continue;
+      }
+      const progress = clamp(localAge / item.life, 0, 1);
+      const scaleProgress = easeOutCubic(clamp(localAge / (item.life * 0.62), 0, 1));
+      item.scale = lerp(item.startScale, item.endScale, scaleProgress);
+      item.opacity = clamp(localAge / 0.16, 0, 1) * clamp((1 - progress) / 0.24, 0, 1) * (0.76 + item.depth * 0.18);
+      item.vx *= Math.pow(0.987, dt * 60);
+      item.vy = item.vy * Math.pow(0.989, dt * 60) - 4 * dt;
+      item.x += item.vx * dt;
+      item.y += item.vy * dt;
+      item.facing = item.vx >= 0 ? 1 : -1;
+      item.tilt = lerp(item.tilt, clamp(Math.atan2(item.vy, Math.abs(item.vx) + 80) * 0.58, -0.42, 0.42), 1 - Math.exp(-4.2 * dt));
+      item.swimPhase += dt * (3.4 + item.depth * 1.9);
+      if (!reducedMotion) {
+        const tailReach = 150 * whaleScale() * item.scale;
+        const spriteRotation = item.facing === 1 ? item.tilt : -item.tilt;
+        const localTailX = -item.facing * tailReach;
+        item.trail.unshift({
+          x: item.x + Math.cos(spriteRotation) * localTailX,
+          y: item.y + Math.sin(spriteRotation) * localTailX,
+        });
+        if (item.trail.length > 12) item.trail.pop();
+      }
     }
 
     for (let index = comets.length - 1; index >= 0; index -= 1) {
@@ -1551,6 +1749,7 @@
     updateParticles(dt);
     updateRipples(now);
     updateFireworks(dt, now);
+    updateMagicQueue(now);
     moon.rotation += moon.spin * dt;
     moon.spin *= Math.pow(0.975, dt * 60);
     screenFlash = Math.max(0, screenFlash - dt * 0.8);
@@ -2183,6 +2382,7 @@
     hue = 0,
     slices = 24,
     bob = 0,
+    breath = 0,
   }) {
     if (!image.complete || !image.naturalWidth) return false;
     const displayHeight = displayWidth * (sourceHeight / sourceWidth);
@@ -2193,11 +2393,11 @@
     ctx.save();
     ctx.translate(x, y + Math.sin(swimPhase * 0.62) * bob);
     ctx.rotate(facing === 1 ? tilt : -tilt);
-    ctx.scale(facing, 1);
+    ctx.scale(facing, 1 + breath);
 
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
-    ctx.globalAlpha = alpha * 0.14;
+    ctx.globalAlpha = alpha * 0.09;
     ctx.filter = `${colorFilter} blur(${Math.max(4, displayWidth * 0.022)}px)`;
     ctx.drawImage(
       image,
@@ -2269,6 +2469,7 @@
   }
 
   function drawWhaleSprite(x, y, scale, facing, tilt, alpha, now, swimPhase = now * 0.003, bend = 0.85) {
+    const finaleLiving = phase === "finale" || phase === "epilogue";
     drawSwimmingSprite({
       image: whaleSprite,
       sourceX: 0,
@@ -2284,7 +2485,8 @@
       swimPhase,
       bend,
       slices: width < 700 ? 24 : 30,
-      bob: 2.2 * scale,
+      bob: (finaleLiving ? 4.8 : 2.2) * scale,
+      breath: finaleLiving ? Math.sin(now * 0.00115) * (reducedMotion ? 0.004 : 0.014) : 0,
     });
   }
 
@@ -2303,6 +2505,8 @@
     ctx.rotate(facing === 1 ? tilt : -tilt);
     ctx.scale(scale, scale);
     ctx.globalCompositeOperation = "lighter";
+    const living = phase === "finale" || phase === "epilogue";
+    const auraBreath = living ? 1 + Math.sin(now * 0.00115) * (reducedMotion ? 0.012 : 0.038) : 1;
 
     const aura = ctx.createRadialGradient(30, -4, 4, 12, 0, 250);
     aura.addColorStop(0, `rgba(75, 230, 255, ${0.12 * alpha * intensity})`);
@@ -2311,7 +2515,7 @@
     aura.addColorStop(1, "rgba(0, 0, 0, 0)");
     ctx.fillStyle = aura;
     ctx.beginPath();
-    ctx.ellipse(0, 0, 255, 94, 0, 0, TAU);
+    ctx.ellipse(0, 0, 255 * auraBreath, 94 * auraBreath, 0, 0, TAU);
     ctx.fill();
 
     const orbitAlpha = (reducedMotion ? 0.08 : 0.13) * alpha * intensity;
@@ -2335,6 +2539,19 @@
     }
     ctx.setLineDash([]);
 
+    if (living) {
+      const reaction = finaleWhaleReaction(now);
+      if (reaction.active) {
+        const ringRadius = lerp(142, reaction.kind === "pod" ? 304 : 258, easeOutCubic(reaction.progress));
+        ctx.globalAlpha = Math.pow(1 - reaction.progress, 1.3) * (reaction.kind === "pod" ? 0.72 : 0.48);
+        ctx.strokeStyle = reaction.kind === "tail" ? "#6cefff" : reaction.kind === "spiral" ? "#c68aff" : "#ffd6a0";
+        ctx.lineWidth = lerp(3.4, 0.7, reaction.progress);
+        ctx.beginPath();
+        ctx.ellipse(0, 0, ringRadius, ringRadius * 0.31, -0.08, 0, TAU);
+        ctx.stroke();
+      }
+    }
+
     if (!reducedMotion) {
       for (let index = 0; index < 11; index += 1) {
         const starX = -176 + index * 34;
@@ -2345,6 +2562,53 @@
         ctx.beginPath();
         ctx.arc(starX, starY, index % 4 === 0 ? 1.25 : 0.72, 0, TAU);
         ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+
+  function drawWhaleBreath(now) {
+    if (phase !== "finale" && phase !== "epilogue") return;
+    const reaction = finaleWhaleReaction(now);
+    const cycle = (now % 5800) / 5800;
+    const natural = cycle < 0.32 ? Math.sin((cycle / 0.32) * Math.PI) : 0;
+    const reactionBreath = reaction.active && reaction.kind === "pod" ? reaction.envelope : 0;
+    const strength = Math.max(natural * (reducedMotion ? 0.34 : 0.72), reactionBreath);
+    if (strength <= 0.025) return;
+
+    const scale = whaleRenderScale(now);
+    const angle = whale.facing === 1 ? whale.tilt : -whale.tilt;
+    const localX = whale.facing * 139 * scale;
+    const localY = -42 * scale;
+    const originX = whale.x + Math.cos(angle) * localX - Math.sin(angle) * localY;
+    const originY = whale.y + Math.sin(angle) * localX + Math.cos(angle) * localY;
+    const count = reducedMotion ? 5 : 12;
+
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    for (let index = 0; index < count; index += 1) {
+      const emissionPhase = reactionBreath > natural ? reaction.progress * 1.75 : cycle * 3.1;
+      const progress = (emissionPhase + index / count) % 1;
+      const rise = easeOutCubic(progress) * Math.min(width, height) * 0.11;
+      const spread = Math.sin(progress * Math.PI) * (9 + index % 4 * 4) * scale;
+      const x = originX + Math.sin(index * 2.31 + now * 0.0011) * spread;
+      const y = originY - rise;
+      const alpha = Math.sin(progress * Math.PI) * strength;
+      ctx.globalAlpha = alpha * (index % 4 === 0 ? 0.82 : 0.54);
+      ctx.fillStyle = index % 5 === 0 ? "#ffd89f" : index % 3 === 0 ? "#c98cff" : "#9cf7ff";
+      ctx.beginPath();
+      ctx.arc(x, y, (index % 4 === 0 ? 1.55 : 0.8) * (0.72 + strength * 0.55), 0, TAU);
+      ctx.fill();
+      if (index % 4 === 0) {
+        const ray = 4 + strength * 5;
+        ctx.strokeStyle = ctx.fillStyle;
+        ctx.lineWidth = 0.7;
+        ctx.beginPath();
+        ctx.moveTo(x - ray, y);
+        ctx.lineTo(x + ray, y);
+        ctx.moveTo(x, y - ray);
+        ctx.lineTo(x, y + ray);
+        ctx.stroke();
       }
     }
     ctx.restore();
@@ -2601,6 +2865,45 @@
   function drawTitle(now) {
     if (!titleParticles.length) return;
     const age = (now - phaseStarted) / 1000;
+    const magicAge = (now - titleMagicAt) / 1000;
+    const magicProgress = clamp(magicAge / 1.15, 0, 1);
+    const magicPulse = magicAge >= 0 && magicAge < 1.15
+      ? Math.sin(magicProgress * Math.PI) * (1 - magicProgress * 0.32)
+      : 0;
+    const magicCenterY = titleBounds ? (titleBounds.top + titleBounds.bottom) / 2 : height * 0.535;
+    ctx.save();
+    if (magicPulse > 0) {
+      ctx.translate(width / 2, magicCenterY);
+      ctx.scale(1 + magicPulse * 0.042, 1 + magicPulse * 0.055);
+      ctx.translate(-width / 2, -magicCenterY);
+
+      const haloRadius = Math.max(78, Math.min(width, height) * (0.11 + magicProgress * 0.13));
+      const halo = ctx.createRadialGradient(width / 2, magicCenterY, 0, width / 2, magicCenterY, haloRadius);
+      halo.addColorStop(0, `rgba(255, 255, 255, ${magicPulse * 0.32})`);
+      halo.addColorStop(0.25, `rgba(92, 239, 255, ${magicPulse * 0.2})`);
+      halo.addColorStop(0.62, `rgba(178, 104, 255, ${magicPulse * 0.11})`);
+      halo.addColorStop(1, "rgba(0, 0, 0, 0)");
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.fillStyle = halo;
+      ctx.beginPath();
+      ctx.ellipse(width / 2, magicCenterY, haloRadius * 1.75, haloRadius * 0.72, 0, 0, TAU);
+      ctx.fill();
+      const rayCount = reducedMotion ? 8 : 18;
+      ctx.strokeStyle = "rgba(221, 251, 255, 0.78)";
+      ctx.lineWidth = 0.75;
+      ctx.globalAlpha = magicPulse * 0.72;
+      for (let index = 0; index < rayCount; index += 1) {
+        const angle = (index / rayCount) * TAU + magicProgress * 0.38;
+        const inner = haloRadius * (0.52 + (index % 2) * 0.09);
+        const outer = haloRadius * (0.82 + (index % 3) * 0.16);
+        ctx.beginPath();
+        ctx.moveTo(width / 2 + Math.cos(angle) * inner * 1.55, magicCenterY + Math.sin(angle) * inner * 0.52);
+        ctx.lineTo(width / 2 + Math.cos(angle) * outer * 1.55, magicCenterY + Math.sin(angle) * outer * 0.52);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
     if (titleGlow && age > 0.5) {
       ctx.save();
       ctx.globalCompositeOperation = "lighter";
@@ -2683,6 +2986,7 @@
       });
       ctx.restore();
     }
+    ctx.restore();
   }
 
   function drawFireworks(now, layer = "all") {
@@ -2747,11 +3051,151 @@
       ctx.fill();
     }
     ctx.restore();
+  }
 
-    zoomWhales.forEach((item) => {
-      const alpha = Math.sin(clamp(item.age / item.life, 0, 1) * Math.PI) * 0.8;
-      drawWhale(item.x, item.y, item.scale, item.facing, -0.12, alpha, now, true);
-    });
+  function drawCelebrationWaves(now) {
+    if (!celebrationWaves.length) return;
+    const shortSide = Math.min(width, height);
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.lineCap = "round";
+    for (const wave of celebrationWaves) {
+      const progress = clamp((now - wave.born) / (wave.life * 1000), 0, 1);
+      if (now < wave.born || progress >= 1) continue;
+      const eased = easeOutCubic(progress);
+      const life = Math.sin(progress * Math.PI);
+      const radius = shortSide * (0.075 + wave.index * 0.014 + eased * 0.25);
+      ctx.globalAlpha = life * (wave.style === "pod" ? 0.72 : 0.54);
+      ctx.strokeStyle = wave.color;
+      ctx.lineWidth = lerp(3.2, 0.65, progress);
+      ctx.beginPath();
+      ctx.ellipse(wave.x, wave.y, radius, radius * 0.42, 0, 0, TAU);
+      ctx.stroke();
+
+      if (wave.style === "spiral") {
+        for (let arm = 0; arm < 2; arm += 1) {
+          ctx.beginPath();
+          for (let step = 0; step <= 30; step += 1) {
+            const local = step / 30;
+            const angle = local * Math.PI * 3.5 + arm * Math.PI + progress * Math.PI * 1.4;
+            const spiralRadius = radius * local * 0.88;
+            const px = wave.x + Math.cos(angle) * spiralRadius;
+            const py = wave.y + Math.sin(angle) * spiralRadius * 0.42;
+            if (!step) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          }
+          ctx.stroke();
+        }
+      } else if (wave.style === "tail") {
+        const top = wave.y - radius * 0.18;
+        ctx.beginPath();
+        ctx.moveTo(wave.x, top + radius * 0.19);
+        ctx.bezierCurveTo(
+          wave.x - radius * 0.13,
+          top - radius * 0.02,
+          wave.x - radius * 0.55,
+          top - radius * 0.19,
+          wave.x - radius * 0.62,
+          top - radius * 0.4,
+        );
+        ctx.bezierCurveTo(
+          wave.x - radius * 0.28,
+          top - radius * 0.37,
+          wave.x - radius * 0.08,
+          top - radius * 0.15,
+          wave.x,
+          top + radius * 0.02,
+        );
+        ctx.bezierCurveTo(
+          wave.x + radius * 0.08,
+          top - radius * 0.15,
+          wave.x + radius * 0.28,
+          top - radius * 0.37,
+          wave.x + radius * 0.62,
+          top - radius * 0.4,
+        );
+        ctx.bezierCurveTo(
+          wave.x + radius * 0.55,
+          top - radius * 0.19,
+          wave.x + radius * 0.13,
+          top - radius * 0.02,
+          wave.x,
+          top + radius * 0.19,
+        );
+        ctx.stroke();
+      } else {
+        const rays = reducedMotion ? 8 : 16;
+        ctx.globalAlpha *= 0.62;
+        for (let index = 0; index < rays; index += 1) {
+          const angle = (index / rays) * TAU + progress * 0.35;
+          const inner = radius * 0.54;
+          const outer = radius * (0.7 + (index % 3) * 0.09);
+          ctx.beginPath();
+          ctx.moveTo(wave.x + Math.cos(angle) * inner, wave.y + Math.sin(angle) * inner * 0.42);
+          ctx.lineTo(wave.x + Math.cos(angle) * outer, wave.y + Math.sin(angle) * outer * 0.42);
+          ctx.stroke();
+        }
+      }
+    }
+    ctx.restore();
+  }
+
+  function drawZoomWhales(now) {
+    if (!zoomWhales.length) return;
+    const ordered = [...zoomWhales].sort((first, second) => first.depth - second.depth);
+    for (const item of ordered) {
+      if (item.opacity <= 0.01) continue;
+      if (item.trail.length > 1) {
+        const head = item.trail[0];
+        const tail = item.trail[item.trail.length - 1];
+        const gradient = ctx.createLinearGradient(tail.x, tail.y, head.x, head.y);
+        gradient.addColorStop(0, "rgba(115, 83, 255, 0)");
+        gradient.addColorStop(0.58, `rgba(109, 122, 255, ${item.opacity * 0.22})`);
+        gradient.addColorStop(1, `rgba(105, 242, 255, ${item.opacity * 0.66})`);
+        ctx.save();
+        ctx.globalCompositeOperation = "lighter";
+        ctx.strokeStyle = gradient;
+        ctx.globalAlpha = item.opacity;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.lineWidth = Math.max(0.65, item.depth * 1.35);
+        ctx.beginPath();
+        ctx.moveTo(head.x, head.y);
+        for (let index = 1; index < item.trail.length; index += 1) {
+          const previous = item.trail[index - 1];
+          const point = item.trail[index];
+          ctx.quadraticCurveTo(previous.x, previous.y, (previous.x + point.x) / 2, (previous.y + point.y) / 2);
+        }
+        ctx.lineTo(tail.x, tail.y);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      const scale = whaleScale() * item.scale;
+      if (!babyWhaleSprite.complete || !babyWhaleSprite.naturalWidth) {
+        drawWhaleVector(item.x, item.y, scale * 0.72, item.facing, item.tilt, item.opacity, now, false);
+        continue;
+      }
+      drawSwimmingSprite({
+        image: babyWhaleSprite,
+        sourceX: 58,
+        sourceY: 200,
+        sourceWidth: 1545,
+        sourceHeight: 579,
+        displayWidth: 330 * scale,
+        x: item.x,
+        y: item.y,
+        facing: item.facing,
+        tilt: item.tilt,
+        alpha: item.opacity,
+        swimPhase: item.swimPhase,
+        bend: item.bend,
+        hue: item.hue,
+        slices: width < 700 ? 14 : 20,
+        bob: 2.2 * scale,
+        breath: Math.sin(item.swimPhase * 0.55) * 0.012,
+      });
+    }
   }
 
   function drawFinaleForeground(now) {
@@ -2821,8 +3265,9 @@
     if (phase !== "seed" && phase !== "awakening") {
       drawWhaleTrail(now);
       const renderScale = whaleRenderScale(now);
+      const finaleReaction = finaleWhaleReaction(now);
       const sanctumIntensity = phase === "finale" || phase === "epilogue"
-        ? 1.18
+        ? 1.18 + finaleReaction.envelope * (finaleReaction.kind === "pod" ? 0.58 : 0.36)
         : phase === "transition"
           ? 0.88
           : phase === "portal"
@@ -2853,9 +3298,12 @@
         whale.swimPhase,
         whale.bend,
       );
+      drawWhaleBreath(now);
     }
 
     if (phase === "finale" || phase === "epilogue") {
+      drawCelebrationWaves(now);
+      drawZoomWhales(now);
       drawTitle(now);
       drawFinaleForeground(now);
     }
@@ -2914,13 +3362,11 @@
         return;
       }
       const now = performance.now();
-      if (now - lastMagicAt < 280) return;
+      if (now - lastMagicAt < 620) return;
       lastMagicAt = now;
       const style = ["tail", "spiral", "pod"][interactiveFirework % 3];
       interactiveFirework += 1;
-      if (style === "pod") spawnWhalePod(x, y);
-      else spawnFirework(x, y, style, 1.15);
-      emitParticles(x, y, reducedMotion ? 24 : 58, { minSpeed: 40, maxSpeed: 210, palette: COLORS });
+      triggerPastieMagic(style, x, y, now);
       audio.chime(interactiveFirework % 5);
       setPrompt(
         style === "tail" ? "Một chiếc đuôi cá voi" : style === "spiral" ? "Một vòng xoắn ngân hà" : "Cả đàn cá voi đến chúc mừng",
@@ -3010,6 +3456,18 @@
       ripples.forEach((ripple) => {
         ripple.born += hiddenDuration;
       });
+      fireworkBlooms.forEach((bloom) => {
+        bloom.born += hiddenDuration;
+      });
+      celebrationWaves.forEach((wave) => {
+        wave.born += hiddenDuration;
+      });
+      magicQueue.forEach((event) => {
+        event.at += hiddenDuration;
+      });
+      if (Number.isFinite(titleMagicAt)) titleMagicAt += hiddenDuration;
+      if (Number.isFinite(whale.finalReactionAt)) whale.finalReactionAt += hiddenDuration;
+      if (lastMagicAt) lastMagicAt += hiddenDuration;
       lastCometAt += hiddenDuration;
       hiddenAt = 0;
     }
