@@ -12,7 +12,7 @@
   const finaleArt = document.querySelector(".art--finale");
   const whaleSprite = new Image();
   whaleSprite.decoding = "async";
-  whaleSprite.src = "assets/cosmic-whale.png";
+  whaleSprite.src = "assets/cosmic-whale-grand-v2.png";
   const babyWhaleSprite = new Image();
   babyWhaleSprite.decoding = "async";
   babyWhaleSprite.src = "assets/baby-cosmic-whale-alpha.png";
@@ -25,6 +25,9 @@
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
   const lerp = (from, to, amount) => from + (to - from) * amount;
   const easeOutCubic = (value) => 1 - Math.pow(1 - value, 3);
+  const easeInOutCubic = (value) => value < 0.5
+    ? 4 * value * value * value
+    : 1 - Math.pow(-2 * value + 2, 3) / 2;
 
   let width = 0;
   let height = 0;
@@ -57,6 +60,7 @@
   const particles = [];
   const ripples = [];
   const fireworks = [];
+  const fireworkBlooms = [];
   const zoomWhales = [];
   const babyWhales = [];
   const comets = [];
@@ -64,14 +68,18 @@
   const warpStreaks = [];
   let titleCore = null;
   let titleGlow = null;
+  let titleLayout = [];
   const finaleEvents = [
-    { time: 0.75, nx: 0.22, ny: 0.3, style: "burst", depth: 0.7, played: false },
-    { time: 1.18, nx: 0.78, ny: 0.27, style: "spiral", depth: 0.82, played: false },
-    { time: 1.72, nx: 0.34, ny: 0.68, style: "tail", depth: 1, played: false },
-    { time: 2.15, nx: 0.7, ny: 0.62, style: "burst", depth: 1.08, played: false },
-    { time: 2.85, nx: 0.5, ny: 0.22, style: "burst", depth: 1.2, played: false },
-    { time: 3.45, nx: 0.17, ny: 0.52, style: "spiral", depth: 0.82, played: false },
-    { time: 3.9, nx: 0.84, ny: 0.49, style: "tail", depth: 0.82, played: false },
+    { time: 0.48, nx: 0.11, ny: 0.23, style: "chrysanthemum", depth: 0.7, played: false },
+    { time: 0.82, nx: 0.89, ny: 0.2, style: "spiral", depth: 0.76, played: false },
+    { time: 1.18, nx: 0.5, ny: 0.43, style: "halo", depth: 0.66, played: false },
+    { time: 1.64, nx: 0.13, ny: 0.58, style: "tail", depth: 1.06, played: false },
+    { time: 2.06, nx: 0.87, ny: 0.56, style: "chrysanthemum", depth: 1.12, played: false },
+    { time: 2.7, nx: 0.24, ny: 0.79, style: "burst", depth: 1.02, played: false },
+    { time: 3.12, nx: 0.78, ny: 0.78, style: "spiral", depth: 1.08, played: false },
+    { time: 3.82, nx: 0.07, ny: 0.39, style: "chrysanthemum", depth: 0.84, played: false },
+    { time: 4.36, nx: 0.93, ny: 0.38, style: "tail", depth: 0.88, played: false },
+    { time: 5.18, nx: 0.5, ny: 0.88, style: "chrysanthemum", depth: 1.18, played: false },
   ];
 
   const pointer = {
@@ -352,6 +360,10 @@
         point.y *= sy;
       });
     });
+    fireworkBlooms.forEach((bloom) => {
+      bloom.x *= sx;
+      bloom.y *= sy;
+    });
     [...zoomWhales, ...comets].forEach((item) => {
       item.x *= sx;
       item.y *= sy;
@@ -376,6 +388,14 @@
     starSeed = 91802;
     stars.length = 0;
     for (let index = 0; index < desired; index += 1) {
+      const spectrum = seededRandom();
+      const hue = spectrum < 0.54
+        ? 188 + seededRandom() * 24
+        : spectrum < 0.76
+          ? 252 + seededRandom() * 34
+          : spectrum < 0.9
+            ? 314 + seededRandom() * 28
+            : 38 + seededRandom() * 16;
       stars.push({
         nx: seededRandom(),
         ny: seededRandom(),
@@ -383,7 +403,7 @@
         size: 0.35 + seededRandom() * 1.45,
         phase: seededRandom() * TAU,
         speed: 0.35 + seededRandom() * 1.25,
-        hue: seededRandom() > 0.82 ? 270 : 200 + seededRandom() * 20,
+        hue,
       });
     }
   }
@@ -406,11 +426,12 @@
     backdropContext.clearRect(0, 0, backdropWidth, backdropHeight);
     backdropContext.globalCompositeOperation = "screen";
     const clouds = [
-      [0.08, 0.24, 0.48, "23, 89, 255", 0.32],
-      [0.34, 0.45, 0.52, "102, 42, 255", 0.28],
-      [0.69, 0.55, 0.46, "0, 191, 255", 0.24],
-      [0.9, 0.76, 0.5, "214, 54, 255", 0.27],
-      [0.47, 0.86, 0.38, "255, 62, 176", 0.16],
+      [0.06, 0.2, 0.48, "33, 101, 255", 0.34],
+      [0.31, 0.43, 0.54, "112, 56, 255", 0.31],
+      [0.68, 0.54, 0.48, "0, 204, 255", 0.25],
+      [0.91, 0.73, 0.52, "222, 66, 239", 0.3],
+      [0.47, 0.86, 0.4, "255, 84, 178", 0.2],
+      [0.76, 0.15, 0.32, "255, 188, 111", 0.12],
     ];
     clouds.forEach(([nx, ny, nr, color, alpha]) => {
       const x = nx * backdropWidth;
@@ -439,6 +460,36 @@
     band.addColorStop(1, "rgba(14, 26, 90, 0)");
     backdropContext.fillStyle = band;
     backdropContext.fillRect(-bandLength / 2, -bandWidth / 2, bandLength, bandWidth);
+
+    backdropContext.lineCap = "round";
+    for (let index = 0; index < 11; index += 1) {
+      const laneY = (index - 5) * bandWidth * 0.052;
+      const sway = bandWidth * (0.08 + random() * 0.13);
+      const colors = ["67, 220, 255", "127, 91, 255", "226, 77, 231", "255, 153, 202", "255, 210, 143"];
+      backdropContext.strokeStyle = `rgba(${colors[index % colors.length]}, ${0.04 + random() * 0.065})`;
+      backdropContext.lineWidth = 0.8 + random() * 3.4;
+      backdropContext.beginPath();
+      backdropContext.moveTo(-bandLength / 2, laneY - sway * 0.22);
+      backdropContext.bezierCurveTo(
+        -bandLength * 0.22,
+        laneY + sway,
+        bandLength * 0.18,
+        laneY - sway,
+        bandLength / 2,
+        laneY + sway * 0.16,
+      );
+      backdropContext.stroke();
+    }
+
+    backdropContext.globalCompositeOperation = "source-over";
+    const dustLane = backdropContext.createLinearGradient(0, -bandWidth * 0.12, 0, bandWidth * 0.17);
+    dustLane.addColorStop(0, "rgba(1, 2, 17, 0)");
+    dustLane.addColorStop(0.45, "rgba(1, 2, 19, 0.34)");
+    dustLane.addColorStop(0.62, "rgba(4, 5, 29, 0.22)");
+    dustLane.addColorStop(1, "rgba(2, 3, 22, 0)");
+    backdropContext.fillStyle = dustLane;
+    backdropContext.fillRect(-bandLength / 2, -bandWidth * 0.18, bandLength, bandWidth * 0.38);
+    backdropContext.globalCompositeOperation = "screen";
     backdropContext.restore();
 
     const dustCount = reducedMotion ? 360 : 920;
@@ -581,23 +632,40 @@
     const base = whaleScale();
     const phaseAge = Math.max(0, now - phaseStarted);
     if (phase === "hunt") {
-      return base * lerp(1.18, 0.84, easeOutCubic(clamp(phaseAge / 900, 0, 1)));
+      return base * lerp(1.16, 0.81, easeOutCubic(clamp(phaseAge / 900, 0, 1)));
     }
     if (phase === "portal") {
-      return base * lerp(0.84, 1, easeOutCubic(clamp(phaseAge / 680, 0, 1)));
+      return base * lerp(0.81, 1, easeOutCubic(clamp(phaseAge / 680, 0, 1)));
     }
     return base;
   }
 
-  function whaleHeadReach(scale = activeWhaleScale()) {
-    return (whaleSprite.complete && whaleSprite.naturalWidth ? 185 : 90) * scale;
+  function whaleRenderScale(now = performance.now()) {
+    const active = activeWhaleScale(now);
+    if (phase === "transition") {
+      const age = (now - phaseStarted) / 1000;
+      return active * (1 + easeOutCubic(clamp((age - 0.45) / 1.1, 0, 1)) * 0.42);
+    }
+    if (phase === "finale" || phase === "epilogue") {
+      const portrait = height > width;
+      const targetWidth = portrait
+        ? width * 1.11
+        : Math.min(width * 0.68, height * 1.03);
+      const entrance = lerp(0.84, 1, easeOutCubic(clamp((now - phaseStarted) / 2300, 0, 1)));
+      return (targetWidth / 420) * entrance;
+    }
+    return active;
   }
 
-  function whaleTailReach(scale = activeWhaleScale()) {
-    return (whaleSprite.complete && whaleSprite.naturalWidth ? 190 : 95) * scale;
+  function whaleHeadReach(scale = whaleRenderScale()) {
+    return (whaleSprite.complete && whaleSprite.naturalWidth ? 207 : 90) * scale;
   }
 
-  function whaleBodyHalfWidth(scale = activeWhaleScale()) {
+  function whaleTailReach(scale = whaleRenderScale()) {
+    return (whaleSprite.complete && whaleSprite.naturalWidth ? 208 : 95) * scale;
+  }
+
+  function whaleBodyHalfWidth(scale = whaleRenderScale()) {
     return (whaleSprite.complete && whaleSprite.naturalWidth ? 210 : 100) * scale;
   }
 
@@ -860,17 +928,20 @@
     setPrompt("", "");
     generateTitleParticles();
     fireworks.length = 0;
+    fireworkBlooms.length = 0;
     finaleEvents.forEach((event) => {
       event.played = false;
     });
     epilogueStarted = false;
-    whale.x = -whaleBodyHalfWidth(whaleScale() * 1.3);
-    whale.y = height * 0.78;
+    const openingScale = whaleRenderScale(phaseStarted);
+    whale.x = -whaleBodyHalfWidth(openingScale) * 0.82;
+    whale.y = height * 0.86;
     whale.vx = width * 0.22;
     whale.vy = -height * 0.03;
     whale.aimX = whale.x;
     whale.aimY = whale.y;
     whale.facing = 1;
+    whale.reveal = 1;
     whale.trail.length = 0;
     emitParticles(portal.x, portal.y, reducedMotion ? 85 : 240, {
       minSpeed: 110,
@@ -886,20 +957,41 @@
     liveStatus.textContent = "Cánh cổng mở. Cả ngân hà đang kết thành lời chúc sinh nhật dành cho Pastie.";
   }
 
+  function measureTrackedText(context, text, tracking) {
+    const characters = Array.from(text);
+    return characters.reduce((total, character) => total + context.measureText(character).width, 0)
+      + Math.max(0, characters.length - 1) * tracking;
+  }
+
+  function drawTrackedText(context, text, centerX, y, tracking, operation = "fill") {
+    const characters = Array.from(text);
+    const totalWidth = measureTrackedText(context, text, tracking);
+    let cursor = centerX - totalWidth / 2;
+    characters.forEach((character) => {
+      const characterWidth = context.measureText(character).width;
+      const characterX = cursor + characterWidth / 2;
+      if (operation === "stroke") context.strokeText(character, characterX, y);
+      else context.fillText(character, characterX, y);
+      cursor += characterWidth + tracking;
+    });
+    return totalWidth;
+  }
+
   function generateTitleParticles(settled = false) {
     if (!width || !height) return;
     const portrait = height > width * 1.05;
     const lines = portrait
       ? [
-          { text: "HAPPY", size: Math.min(width * 0.15, height * 0.075, 104), y: height * 0.305 },
-          { text: "BIRTHDAY", size: Math.min(width * 0.125, height * 0.064, 88), y: height * 0.405 },
-          { text: "PASTIE", size: Math.min(width * 0.18, height * 0.098, 136), y: height * 0.515 },
+          { text: "HAPPY", size: Math.min(width * 0.155, height * 0.074, 106), y: height * 0.292, tracking: 0.055 },
+          { text: "BIRTHDAY", size: Math.min(width * 0.128, height * 0.064, 90), y: height * 0.398, tracking: 0.042 },
+          { text: "PASTIE", size: Math.min(width * 0.19, height * 0.1, 144), y: height * 0.518, tracking: 0.075 },
         ]
       : [
-          { text: "HAPPY", size: Math.min(width * 0.085, height * 0.09, 92), y: height * 0.27 },
-          { text: "BIRTHDAY", size: Math.min(width * 0.072, height * 0.082, 84), y: height * 0.39 },
-          { text: "PASTIE", size: Math.min(width * 0.11, height * 0.14, 132), y: height * 0.52 },
+          { text: "HAPPY", size: Math.min(width * 0.09, height * 0.1, 102), y: height * 0.265, tracking: 0.06 },
+          { text: "BIRTHDAY", size: Math.min(width * 0.078, height * 0.088, 92), y: height * 0.395, tracking: 0.045 },
+          { text: "PASTIE", size: Math.min(width * 0.12, height * 0.16, 150), y: height * 0.535, tracking: 0.078 },
         ];
+    const fontFamily = '"Palatino Linotype", Georgia, "Times New Roman", serif';
     const mask = document.createElement("canvas");
     mask.width = width;
     mask.height = height;
@@ -910,9 +1002,10 @@
     maskContext.textAlign = "center";
     maskContext.textBaseline = "middle";
     lines.forEach((line) => {
-      maskContext.font = `900 ${line.size}px Arial, sans-serif`;
-      maskContext.lineWidth = Math.max(3.2, line.size * 0.055);
-      maskContext.strokeText(line.text, width / 2, line.y);
+      line.trackingPx = line.size * line.tracking;
+      maskContext.font = `900 ${line.size}px ${fontFamily}`;
+      maskContext.lineWidth = Math.max(3, line.size * 0.046);
+      drawTrackedText(maskContext, line.text, width / 2, line.y, line.trackingPx, "stroke");
     });
 
     titleCore = document.createElement("canvas");
@@ -923,33 +1016,51 @@
     coreContext.textBaseline = "middle";
     coreContext.lineJoin = "round";
     lines.forEach((line, index) => {
-      coreContext.font = `900 ${line.size}px Arial, sans-serif`;
-      coreContext.strokeStyle = "rgba(0, 8, 31, 0.94)";
-      coreContext.lineWidth = Math.max(5, line.size * 0.11);
-      coreContext.strokeText(line.text, width / 2, line.y);
-      coreContext.fillStyle = index === lines.length - 1 ? "rgba(211, 247, 255, 0.98)" : "rgba(237, 252, 255, 0.96)";
-      coreContext.fillText(line.text, width / 2, line.y);
-      coreContext.strokeStyle = index === lines.length - 1 ? "rgba(76, 218, 255, 0.98)" : "rgba(169, 214, 255, 0.94)";
-      coreContext.lineWidth = Math.max(1.2, line.size * 0.025);
-      coreContext.strokeText(line.text, width / 2, line.y);
+      coreContext.font = `900 ${line.size}px ${fontFamily}`;
+      const lineWidth = measureTrackedText(coreContext, line.text, line.trackingPx);
+      line.width = lineWidth;
+
+      coreContext.strokeStyle = "rgba(0, 4, 24, 0.98)";
+      coreContext.lineWidth = Math.max(5.5, line.size * 0.11);
+      drawTrackedText(coreContext, line.text, width / 2, line.y, line.trackingPx, "stroke");
+
+      const edge = coreContext.createLinearGradient(width / 2 - lineWidth / 2, 0, width / 2 + lineWidth / 2, 0);
+      edge.addColorStop(0, "rgba(63, 221, 255, 0.98)");
+      edge.addColorStop(0.5, "rgba(177, 105, 255, 0.98)");
+      edge.addColorStop(1, index === lines.length - 1 ? "rgba(255, 203, 143, 0.94)" : "rgba(107, 226, 255, 0.96)");
+      coreContext.strokeStyle = edge;
+      coreContext.lineWidth = Math.max(2.8, line.size * 0.052);
+      drawTrackedText(coreContext, line.text, width / 2, line.y, line.trackingPx, "stroke");
+
+      const crystal = coreContext.createLinearGradient(0, line.y - line.size * 0.58, 0, line.y + line.size * 0.58);
+      crystal.addColorStop(0, "#ffffff");
+      crystal.addColorStop(0.28, "#e7fbff");
+      crystal.addColorStop(0.63, index === lines.length - 1 ? "#9ee7ff" : "#b9efff");
+      crystal.addColorStop(1, index === lines.length - 1 ? "#d2a8ff" : "#8abfff");
+      coreContext.fillStyle = crystal;
+      drawTrackedText(coreContext, line.text, width / 2, line.y, line.trackingPx, "fill");
+
+      coreContext.strokeStyle = "rgba(255, 255, 255, 0.86)";
+      coreContext.lineWidth = Math.max(1, line.size * 0.018);
+      drawTrackedText(coreContext, line.text, width / 2, line.y - line.size * 0.01, line.trackingPx, "stroke");
     });
 
     const nameLine = lines[lines.length - 1];
-    coreContext.font = `900 ${nameLine.size}px Arial, sans-serif`;
-    const nameWidth = coreContext.measureText("PASTIE").width;
+    titleLayout = lines;
     titleGlow = document.createElement("canvas");
     titleGlow.width = width;
     titleGlow.height = height;
     const glowContext = titleGlow.getContext("2d");
-    glowContext.filter = `blur(${reducedMotion ? 6 : 12}px)`;
+    glowContext.filter = `blur(${reducedMotion ? 6 : width < 700 ? 10 : 15}px)`;
+    glowContext.globalAlpha = 0.94;
     glowContext.drawImage(titleCore, 0, 0);
 
     const image = maskContext.getImageData(0, 0, width, height).data;
     const step = reducedMotion ? 6 : width < 560 ? 3 : 4;
     const points = [];
-    const startY = Math.max(0, Math.floor(lines[0].y - lines[0].size * 0.7));
-    const endY = Math.min(height, Math.ceil(nameLine.y + nameLine.size * 0.68));
-    const maximum = reducedMotion ? 850 : width < 560 ? 2300 : 3000;
+    const startY = Math.max(0, Math.floor(lines[0].y - lines[0].size * 0.72));
+    const endY = Math.min(height, Math.ceil(nameLine.y + nameLine.size * 0.72));
+    const maximum = reducedMotion ? 850 : width < 560 ? 2400 : 3200;
     let previousInRow = -1;
 
     for (let y = startY; y < endY && points.length < maximum; y += step) {
@@ -964,8 +1075,8 @@
             ty: y + (Math.random() - 0.5) * 1.8,
             vx: (Math.random() - 0.5) * 65,
             vy: (Math.random() - 0.5) * 65,
-            delay: settled ? 0 : 0.32 + Math.random() * 0.95,
-            size: 0.78 + Math.random() * 1.35,
+            delay: settled ? 0 : 0.24 + Math.random() * 1.02,
+            size: 0.78 + Math.random() * 1.45,
             phase: Math.random() * TAU,
             link: previousInRow,
           };
@@ -979,10 +1090,10 @@
 
     titleParticles = points;
     titleBounds = {
-      left: width / 2 - nameWidth / 2 - 18,
-      right: width / 2 + nameWidth / 2 + 18,
-      top: nameLine.y - nameLine.size * 0.62,
-      bottom: nameLine.y + nameLine.size * 0.7,
+      left: width / 2 - nameLine.width / 2 - 22,
+      right: width / 2 + nameLine.width / 2 + 22,
+      top: nameLine.y - nameLine.size * 0.68,
+      bottom: nameLine.y + nameLine.size * 0.72,
     };
   }
 
@@ -1008,6 +1119,8 @@
   }
 
   function updateWhale(dt, now) {
+    let scriptedFinale = false;
+    let scriptedTilt = whale.tilt;
     if (phase === "hunt" && currentWish?.selected) {
       whale.targetX = currentWish.x - currentWish.approachFacing * whaleHeadReach();
       whale.targetY = currentWish.y;
@@ -1033,39 +1146,78 @@
       }
     } else if (phase === "finale" || phase === "epilogue") {
       const finaleAge = (now - phaseStarted) / 1000;
-      const settle = easeOutCubic(clamp(finaleAge / 2.6, 0, 1));
-      const guardianX = width * (height > width ? 0.56 : 0.66);
-      const guardianY = height * (height > width ? 0.7 : 0.78);
-      const livingX = guardianX + Math.cos(now * 0.00042) * width * 0.035;
-      const livingY = guardianY + Math.sin(now * 0.00058) * height * 0.018;
-      whale.targetX = lerp(width * 0.18, livingX, settle);
-      whale.targetY = lerp(height * 0.81, livingY, settle);
+      const portrait = height > width;
+      const guardianX = width * (portrait ? 0.5 : 0.6);
+      const guardianY = height * (portrait ? 0.735 : 0.735);
+      const entryDuration = reducedMotion ? 1.4 : 2.85;
+      if (finaleAge < entryDuration) {
+        const progress = easeOutCubic(clamp(finaleAge / entryDuration, 0, 1));
+        const scale = whaleRenderScale(now);
+        const points = [
+          { x: -whaleBodyHalfWidth(scale) * 0.82, y: height * 0.87 },
+          { x: width * 0.1, y: height * (portrait ? 0.69 : 0.58) },
+          { x: width * (portrait ? 0.3 : 0.34), y: height * (portrait ? 0.86 : 0.83) },
+          { x: guardianX, y: guardianY },
+        ];
+        const inverse = 1 - progress;
+        const nextX = inverse ** 3 * points[0].x
+          + 3 * inverse ** 2 * progress * points[1].x
+          + 3 * inverse * progress ** 2 * points[2].x
+          + progress ** 3 * points[3].x;
+        const nextY = inverse ** 3 * points[0].y
+          + 3 * inverse ** 2 * progress * points[1].y
+          + 3 * inverse * progress ** 2 * points[2].y
+          + progress ** 3 * points[3].y;
+        const tangentX = 3 * inverse ** 2 * (points[1].x - points[0].x)
+          + 6 * inverse * progress * (points[2].x - points[1].x)
+          + 3 * progress ** 2 * (points[3].x - points[2].x);
+        const tangentY = 3 * inverse ** 2 * (points[1].y - points[0].y)
+          + 6 * inverse * progress * (points[2].y - points[1].y)
+          + 3 * progress ** 2 * (points[3].y - points[2].y);
+        whale.x = nextX;
+        whale.y = nextY;
+        whale.vx = tangentX / entryDuration;
+        whale.vy = tangentY / entryDuration;
+        whale.targetX = nextX;
+        whale.targetY = nextY;
+        whale.aimX = nextX;
+        whale.aimY = nextY;
+        scriptedTilt = clamp(Math.atan2(tangentY, Math.max(80, Math.abs(tangentX))) * 0.72, -0.3, 0.2);
+        scriptedFinale = true;
+      } else {
+        const livingX = guardianX + Math.cos(now * 0.00032) * width * 0.018;
+        const livingY = guardianY + Math.sin(now * 0.00043) * height * 0.009;
+        whale.targetX = livingX;
+        whale.targetY = livingY;
+      }
     }
 
-    const aimResponse = phase === "transition" ? 8.5 : phase === "portal" ? 4.6 : 2.7;
-    const aimBlend = 1 - Math.exp(-aimResponse * dt);
-    whale.aimX += (whale.targetX - whale.aimX) * aimBlend;
-    whale.aimY += (whale.targetY - whale.aimY) * aimBlend;
+    if (!scriptedFinale) {
+      const aimResponse = phase === "transition" ? 8.5 : phase === "portal" ? 4.6 : 2.7;
+      const aimBlend = 1 - Math.exp(-aimResponse * dt);
+      whale.aimX += (whale.targetX - whale.aimX) * aimBlend;
+      whale.aimY += (whale.targetY - whale.aimY) * aimBlend;
 
-    const dx = whale.aimX - whale.x;
-    const dy = whale.aimY - whale.y;
-    const dist = Math.max(0.001, Math.hypot(dx, dy));
-    const maxSpeed = phase === "transition"
-      ? 760
-      : phase === "portal"
-        ? 320 + hold.progress * 170
-        : phase === "finale" || phase === "epilogue"
-          ? 360
-          : 235;
-    const arrival = clamp(dist / Math.max(95, Math.min(width, height) * 0.21), 0, 1);
-    const desiredX = dist > 1 ? (dx / dist) * maxSpeed * arrival : 0;
-    const desiredY = dist > 1 ? (dy / dist) * maxSpeed * arrival : 0;
-    const steer = phase === "transition" ? 5.8 : phase === "portal" ? 3.8 : 2.35;
-    const velocityBlend = 1 - Math.exp(-steer * dt);
-    whale.vx += (desiredX - whale.vx) * velocityBlend;
-    whale.vy += (desiredY - whale.vy) * velocityBlend;
-    whale.x += whale.vx * dt;
-    whale.y += whale.vy * dt;
+      const dx = whale.aimX - whale.x;
+      const dy = whale.aimY - whale.y;
+      const dist = Math.max(0.001, Math.hypot(dx, dy));
+      const maxSpeed = phase === "transition"
+        ? 760
+        : phase === "portal"
+          ? 320 + hold.progress * 170
+          : phase === "finale" || phase === "epilogue"
+            ? 280
+            : 235;
+      const arrival = clamp(dist / Math.max(95, Math.min(width, height) * 0.21), 0, 1);
+      const desiredX = dist > 1 ? (dx / dist) * maxSpeed * arrival : 0;
+      const desiredY = dist > 1 ? (dy / dist) * maxSpeed * arrival : 0;
+      const steer = phase === "transition" ? 5.8 : phase === "portal" ? 3.8 : 2.35;
+      const velocityBlend = 1 - Math.exp(-steer * dt);
+      whale.vx += (desiredX - whale.vx) * velocityBlend;
+      whale.vy += (desiredY - whale.vy) * velocityBlend;
+      whale.x += whale.vx * dt;
+      whale.y += whale.vy * dt;
+    }
 
     if (phase === "hunt") {
       const scale = activeWhaleScale(now);
@@ -1088,10 +1240,12 @@
     }
     const speed = Math.hypot(whale.vx, whale.vy);
     const desiredTilt = clamp(Math.atan2(whale.vy, Math.abs(whale.vx) + 70), -0.5, 0.5);
-    whale.tilt = lerp(whale.tilt, desiredTilt, 1 - Math.exp(-2.35 * dt));
+    whale.tilt = scriptedFinale
+      ? lerp(whale.tilt, scriptedTilt, 1 - Math.exp(-6.5 * dt))
+      : lerp(whale.tilt, desiredTilt, 1 - Math.exp(-2.35 * dt));
     const bendTarget = 0.7 + clamp(speed / 250, 0, 1) * 0.5 + clamp(Math.abs(desiredTilt - whale.tilt) * 1.4, 0, 0.35);
     whale.bend = lerp(whale.bend, bendTarget, 1 - Math.exp(-2.8 * dt));
-    whale.swimPhase += dt * (1.55 + clamp(speed / 115, 0, 2.2));
+    whale.swimPhase += dt * (0.9 + clamp(speed / 150, 0, 1.25));
 
     for (let index = whale.trail.length - 1; index >= 0; index -= 1) {
       const point = whale.trail[index];
@@ -1102,7 +1256,7 @@
 
     if (whale.reveal > 0.35 && speed > 22 && whale.trailClock > (reducedMotion ? 0.13 : 0.072)) {
       whale.trailClock = 0;
-      const scale = activeWhaleScale(now);
+      const scale = whaleRenderScale(now);
       const reach = whaleTailReach(scale);
       const tailX = whale.x - whale.facing * Math.cos(whale.tilt) * reach;
       const tailY = whale.y - Math.sin(whale.tilt) * reach + Math.sin(whale.swimPhase - 2.5) * 7 * scale;
@@ -1133,7 +1287,7 @@
     }
 
     if (phase === "hunt" && currentWish?.selected) {
-      const scale = activeWhaleScale(now);
+      const scale = whaleRenderScale(now);
       const reach = whaleHeadReach(scale);
       const headX = whale.x + whale.facing * Math.cos(whale.tilt) * reach;
       const headY = whale.y + Math.sin(whale.tilt) * reach;
@@ -1229,26 +1383,50 @@
   }
 
   function spawnFirework(x, y, style = "burst", depth = 1) {
-    const requested = reducedMotion ? 24 : style === "burst" ? 74 : 96;
-    const count = Math.max(0, Math.min(requested, 800 - fireworks.length));
+    const cap = reducedMotion ? 420 : width < 700 ? 640 : 900;
+    const requested = reducedMotion
+      ? 24
+      : style === "chrysanthemum"
+        ? 112
+        : style === "halo"
+          ? 86
+          : style === "burst"
+            ? 78
+            : 96;
+    const count = Math.max(0, Math.min(requested, cap - fireworks.length));
     if (!count) return;
     const palette = COLORS.slice();
+    const bloomColor = style === "chrysanthemum" ? "#ffd39a" : style === "halo" ? "#a98cff" : palette[Math.floor(Math.random() * palette.length)];
+    fireworkBlooms.push({ x, y, born: performance.now(), life: style === "halo" ? 1.35 : 0.95, color: bloomColor, depth });
+    const addParticle = (vx, vy, color, size, life, gravity = 14) => {
+      fireworks.push({
+        x,
+        y,
+        vx,
+        vy,
+        age: 0,
+        life,
+        color,
+        size: size * depth,
+        depth,
+        gravity,
+        trailLimit: depth < 0.9 ? 3 : depth > 1.08 ? 6 : 4,
+        trail: [],
+      });
+    };
     if (style === "spiral") {
       for (let index = 0; index < count; index += 1) {
         const arm = index % 2;
         const angle = (index / count) * Math.PI * 5 + arm * Math.PI;
         const speed = 45 + (index / count) * 220;
-        fireworks.push({
-          x,
-          y,
-          vx: Math.cos(angle) * speed,
-          vy: Math.sin(angle) * speed,
-          age: 0,
-          life: 1.8 + Math.random() * 1.2,
-          color: palette[index % palette.length],
-          size: (1.1 + Math.random() * 2.2) * depth,
-          trail: [],
-        });
+        addParticle(
+          Math.cos(angle) * speed,
+          Math.sin(angle) * speed,
+          palette[index % palette.length],
+          1.1 + Math.random() * 2.2,
+          1.8 + Math.random() * 1.2,
+          8,
+        );
       }
     } else if (style === "tail") {
       for (let index = 0; index < count; index += 1) {
@@ -1256,33 +1434,40 @@
         const progress = (index / count) * Math.PI;
         const vx = side * (50 + Math.sin(progress) * 210);
         const vy = -175 + Math.cos(progress) * 155 + Math.random() * 26;
-        fireworks.push({
-          x,
-          y,
-          vx,
-          vy,
-          age: 0,
-          life: 1.45 + Math.random() * 0.9,
-          color: palette[(index + 2) % palette.length],
-          size: (1.1 + Math.random() * 2.2) * depth,
-          trail: [],
-        });
+        addParticle(vx, vy, palette[(index + 2) % palette.length], 1.1 + Math.random() * 2.2, 1.45 + Math.random() * 0.9, 18);
+      }
+    } else if (style === "chrysanthemum") {
+      for (let index = 0; index < count; index += 1) {
+        const angle = (index / count) * TAU + Math.sin(index * 2.13) * 0.025;
+        const ring = index % 3;
+        const speed = (96 + ring * 68 + Math.random() * 28) * depth;
+        const color = ring === 2 ? "#ffd59c" : ring === 1 ? "#df8dff" : "#7cefff";
+        addParticle(Math.cos(angle) * speed, Math.sin(angle) * speed, color, 1 + ring * 0.42 + Math.random() * 1.2, 1.45 + ring * 0.35 + Math.random() * 0.48, 12);
+      }
+    } else if (style === "halo") {
+      for (let index = 0; index < count; index += 1) {
+        const angle = (index / count) * TAU;
+        const speed = (118 + Math.sin(index * 1.77) * 13) * depth;
+        addParticle(
+          Math.cos(angle) * speed,
+          Math.sin(angle) * speed * 0.58,
+          index % 6 === 0 ? "#ffd49b" : index % 2 ? "#71edff" : "#bf83ff",
+          0.9 + Math.random() * 1.45,
+          2.1 + Math.random() * 0.55,
+          3,
+        );
       }
     } else {
       for (let index = 0; index < count; index += 1) {
         const angle = (index / count) * TAU + Math.random() * 0.08;
         const speed = (85 + Math.random() * 245) * depth;
-        fireworks.push({
-          x,
-          y,
-          vx: Math.cos(angle) * speed,
-          vy: Math.sin(angle) * speed,
-          age: 0,
-          life: 1.15 + Math.random() * 1.3,
-          color: palette[Math.floor(Math.random() * palette.length)],
-          size: (0.9 + Math.random() * 2.4) * depth,
-          trail: [],
-        });
+        addParticle(
+          Math.cos(angle) * speed,
+          Math.sin(angle) * speed,
+          palette[Math.floor(Math.random() * palette.length)],
+          0.9 + Math.random() * 2.4,
+          1.15 + Math.random() * 1.3,
+        );
       }
     }
   }
@@ -1318,7 +1503,7 @@
     });
   }
 
-  function updateFireworks(dt) {
+  function updateFireworks(dt, now) {
     for (let index = fireworks.length - 1; index >= 0; index -= 1) {
       const particle = fireworks[index];
       particle.age += dt;
@@ -1326,16 +1511,20 @@
         fireworks.splice(index, 1);
         continue;
       }
-      if (!reducedMotion && particle.trail.length < 4) {
+      if (!reducedMotion && particle.trail.length < particle.trailLimit) {
         particle.trail.unshift({ x: particle.x, y: particle.y });
       } else if (!reducedMotion) {
         particle.trail.pop();
         particle.trail.unshift({ x: particle.x, y: particle.y });
       }
       particle.vx *= Math.pow(0.975, dt * 60);
-      particle.vy = particle.vy * Math.pow(0.975, dt * 60) + 14 * dt;
+      particle.vy = particle.vy * Math.pow(0.975, dt * 60) + particle.gravity * dt;
       particle.x += particle.vx * dt;
       particle.y += particle.vy * dt;
+    }
+
+    for (let index = fireworkBlooms.length - 1; index >= 0; index -= 1) {
+      if ((now - fireworkBlooms[index].born) / 1000 >= fireworkBlooms[index].life) fireworkBlooms.splice(index, 1);
     }
 
     for (let index = zoomWhales.length - 1; index >= 0; index -= 1) {
@@ -1361,7 +1550,7 @@
     energy = lerp(energy, energyTarget, clamp(dt * 0.9, 0, 1));
     updateParticles(dt);
     updateRipples(now);
-    updateFireworks(dt);
+    updateFireworks(dt, now);
     moon.rotation += moon.spin * dt;
     moon.spin *= Math.pow(0.975, dt * 60);
     screenFlash = Math.max(0, screenFlash - dt * 0.8);
@@ -1450,7 +1639,7 @@
         }
       });
 
-      if (age > 4.6 && !epilogueStarted) {
+      if (age > 6.25 && !epilogueStarted) {
         epilogueStarted = true;
         phase = "epilogue";
         setPrompt("Chạm vào Pastie", "Mỗi lần chạm là một phép màu khác", 6500);
@@ -1487,6 +1676,8 @@
       ctx.drawImage(cosmicBackdrop, -10 + driftX, -10 + driftY, width + 20, height + 20);
       ctx.restore();
     }
+
+    drawAuroraVeils(now, finalMode ? 1 : 0.28 + energy * 0.72);
 
     const parallaxX = (pointer.x - width / 2) / width;
     const parallaxY = (pointer.y - height / 2) / height;
@@ -1536,6 +1727,41 @@
     drawNebula(finalMode ? Math.max(energy, 1) : Math.max(0.14, energy), now);
   }
 
+  function drawAuroraVeils(now, intensity) {
+    if (intensity <= 0.02) return;
+    const shortSide = Math.min(width, height);
+    ctx.save();
+    ctx.globalCompositeOperation = "screen";
+    const ribbons = [
+      { y: 0.22, lift: 0.24, colors: ["rgba(42, 223, 255, 0)", "rgba(49, 206, 255, 0.17)", "rgba(137, 83, 255, 0.03)"] },
+      { y: 0.55, lift: -0.2, colors: ["rgba(105, 72, 255, 0)", "rgba(202, 70, 235, 0.14)", "rgba(255, 102, 190, 0.02)"] },
+      { y: 0.82, lift: 0.16, colors: ["rgba(255, 100, 187, 0)", "rgba(255, 184, 135, 0.09)", "rgba(70, 213, 255, 0.02)"] },
+    ];
+    ribbons.forEach((ribbon, index) => {
+      const drift = Math.sin(now * (0.000055 + index * 0.000014) + index * 2.1) * height * 0.045;
+      const gradient = ctx.createLinearGradient(-width * 0.1, 0, width * 1.1, 0);
+      gradient.addColorStop(0, ribbon.colors[0]);
+      gradient.addColorStop(0.48, ribbon.colors[1]);
+      gradient.addColorStop(1, ribbon.colors[2]);
+      ctx.strokeStyle = gradient;
+      ctx.globalAlpha = intensity * (phase === "seed" ? 0.2 : 0.54);
+      ctx.lineWidth = shortSide * (0.034 + index * 0.007);
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(-width * 0.12, height * ribbon.y + drift);
+      ctx.bezierCurveTo(
+        width * 0.2,
+        height * (ribbon.y + ribbon.lift) - drift * 0.4,
+        width * 0.72,
+        height * (ribbon.y - ribbon.lift) + drift * 0.25,
+        width * 1.12,
+        height * (ribbon.y + ribbon.lift * 0.32) - drift * 0.5,
+      );
+      ctx.stroke();
+    });
+    ctx.restore();
+  }
+
   function drawNebula(amount, now) {
     ctx.save();
     ctx.globalCompositeOperation = "screen";
@@ -1545,10 +1771,11 @@
         ? 1.45
         : 1;
     const clouds = [
-      [0.17, 0.36, 0.42, "64, 63, 255", 0.18],
-      [0.82, 0.62, 0.48, "176, 42, 255", 0.16],
-      [0.54, 0.18, 0.32, "0, 174, 255", 0.14],
-      [0.48, 0.82, 0.4, "255, 71, 176", 0.1],
+      [0.14, 0.32, 0.43, "52, 70, 255", 0.19],
+      [0.84, 0.6, 0.49, "190, 49, 238", 0.18],
+      [0.55, 0.16, 0.34, "0, 190, 255", 0.15],
+      [0.46, 0.84, 0.42, "255, 77, 181", 0.12],
+      [0.76, 0.28, 0.26, "255, 189, 115", 0.065],
     ];
     clouds.forEach((cloud, index) => {
       const driftX = Math.sin(now * 0.00008 + index) * width * 0.025;
@@ -1563,6 +1790,93 @@
       ctx.fillStyle = gradient;
       ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
     });
+    ctx.restore();
+  }
+
+  function drawFinaleStage(now) {
+    if (phase !== "finale" && phase !== "epilogue") return;
+    const age = (now - phaseStarted) / 1000;
+    const reveal = easeOutCubic(clamp(age / 1.35, 0, 1));
+    const portrait = height > width;
+    const centerX = width * 0.5;
+    const centerY = height * (portrait ? 0.43 : 0.42);
+    const radiusX = portrait ? width * 0.48 : Math.min(width * 0.34, height * 0.53);
+    const radiusY = portrait ? height * 0.31 : height * 0.34;
+
+    ctx.save();
+    const scrimRadius = Math.max(width * 0.42, height * 0.28);
+    const scrim = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, scrimRadius);
+    scrim.addColorStop(0, `rgba(1, 6, 29, ${0.48 * reveal})`);
+    scrim.addColorStop(0.42, `rgba(2, 7, 31, ${0.26 * reveal})`);
+    scrim.addColorStop(1, "rgba(1, 3, 18, 0)");
+    ctx.fillStyle = scrim;
+    ctx.fillRect(0, 0, width, height);
+
+    ctx.globalCompositeOperation = "lighter";
+    ctx.translate(centerX, centerY);
+    for (let index = 0; index < 14; index += 1) {
+      const angle = (index / 14) * TAU + now * 0.000018;
+      const inner = Math.min(radiusX, radiusY) * 0.42;
+      const outer = Math.max(radiusX, radiusY) * (0.9 + (index % 3) * 0.08);
+      const ray = ctx.createLinearGradient(
+        Math.cos(angle) * inner,
+        Math.sin(angle) * inner,
+        Math.cos(angle) * outer,
+        Math.sin(angle) * outer,
+      );
+      ray.addColorStop(0, "rgba(105, 228, 255, 0)");
+      ray.addColorStop(0.55, index % 3 === 0 ? "rgba(255, 198, 143, 0.1)" : "rgba(147, 102, 255, 0.075)");
+      ray.addColorStop(1, "rgba(113, 224, 255, 0)");
+      ctx.strokeStyle = ray;
+      ctx.globalAlpha = reveal * 0.7;
+      ctx.lineWidth = index % 4 === 0 ? 2 : 1;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(angle) * inner, Math.sin(angle) * inner);
+      ctx.lineTo(Math.cos(angle) * outer, Math.sin(angle) * outer);
+      ctx.stroke();
+    }
+
+    const ringGradient = ctx.createLinearGradient(-radiusX, -radiusY, radiusX, radiusY);
+    ringGradient.addColorStop(0, "rgba(62, 226, 255, 0.78)");
+    ringGradient.addColorStop(0.36, "rgba(131, 87, 255, 0.56)");
+    ringGradient.addColorStop(0.7, "rgba(232, 86, 224, 0.62)");
+    ringGradient.addColorStop(1, "rgba(255, 211, 145, 0.82)");
+    for (let index = 0; index < 4; index += 1) {
+      const direction = index % 2 ? -1 : 1;
+      const rotation = -0.22 + index * 0.09 + now * (0.000025 + index * 0.000009) * direction;
+      ctx.globalAlpha = reveal * (0.18 + index * 0.055);
+      ctx.strokeStyle = ringGradient;
+      ctx.lineWidth = 0.9 + index * 0.58;
+      ctx.setLineDash(index === 1 ? [5, 15] : index === 3 ? [2, 12] : []);
+      ctx.lineDashOffset = now * direction * 0.006;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, radiusX * (0.78 + index * 0.095), radiusY * (0.76 + index * 0.08), rotation, 0, TAU);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+
+    if (age < 1.65) {
+      const shock = easeOutCubic(clamp(age / 1.65, 0, 1));
+      ctx.globalAlpha = Math.pow(1 - shock, 1.7) * 0.88;
+      ctx.strokeStyle = "#e9feff";
+      ctx.lineWidth = 2 + (1 - shock) * 7;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, radiusX * shock, radiusY * shock, -0.12, 0, TAU);
+      ctx.stroke();
+    }
+
+    for (let index = 0; index < (reducedMotion ? 20 : 48); index += 1) {
+      const orbit = now * (0.000035 + (index % 5) * 0.000005) * (index % 2 ? -1 : 1) + index * 2.39996;
+      const lane = 0.76 + (index % 7) * 0.052;
+      const x = Math.cos(orbit) * radiusX * lane;
+      const y = Math.sin(orbit) * radiusY * lane;
+      const pulse = 0.32 + Math.sin(now * 0.0014 + index) * 0.2;
+      ctx.globalAlpha = Math.max(0.08, pulse) * reveal;
+      ctx.fillStyle = index % 9 === 0 ? "#ffd59c" : index % 4 === 0 ? "#cf8fff" : "#91f3ff";
+      ctx.beginPath();
+      ctx.arc(x, y, index % 9 === 0 ? 1.7 : 0.65 + (index % 3) * 0.28, 0, TAU);
+      ctx.fill();
+    }
     ctx.restore();
   }
 
@@ -1872,7 +2186,9 @@
   }) {
     if (!image.complete || !image.naturalWidth) return false;
     const displayHeight = displayWidth * (sourceHeight / sourceWidth);
-    const colorFilter = hue ? `hue-rotate(${hue}deg) saturate(1.06)` : "none";
+    const colorFilter = hue
+      ? `hue-rotate(${hue}deg) saturate(1.08) contrast(1.02)`
+      : "saturate(1.08) contrast(1.035)";
 
     ctx.save();
     ctx.translate(x, y + Math.sin(swimPhase * 0.62) * bob);
@@ -1882,7 +2198,7 @@
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
     ctx.globalAlpha = alpha * 0.14;
-    ctx.filter = `${colorFilter === "none" ? "" : `${colorFilter} `}blur(${Math.max(4, displayWidth * 0.025)}px)`;
+    ctx.filter = `${colorFilter} blur(${Math.max(4, displayWidth * 0.022)}px)`;
     ctx.drawImage(
       image,
       sourceX,
@@ -1917,16 +2233,18 @@
       const sliceSourceWidth = sourceWidth / slices;
       const sliceDisplayWidth = displayWidth / slices;
       const waveOffset = (normalized) => {
-        const tailInfluence = Math.pow(1 - normalized, 1.62);
-        const amplitude = (1.2 + tailInfluence * 10.2) * (displayWidth / 420) * bend;
-        return Math.sin(swimPhase - tailInfluence * 2.85) * amplitude;
+        const tailInfluence = Math.pow(1 - normalized, 2.25);
+        const amplitude = (0.45 + tailInfluence * 16) * (displayWidth / 420) * bend;
+        const primary = Math.sin(swimPhase - tailInfluence * 3.65);
+        const secondary = Math.sin(swimPhase * 2.03 - tailInfluence * 5.15 + 0.4) * 0.23;
+        return (primary + secondary) * amplitude;
       };
       for (let index = 0; index < slices; index += 1) {
         const normalized = (index + 0.5) / slices;
         const offsetY = waveOffset(normalized);
         const previousOffset = waveOffset(clamp(normalized - 1 / slices, 0, 1));
         const nextOffset = waveOffset(clamp(normalized + 1 / slices, 0, 1));
-        const sliceAngle = Math.atan2(nextOffset - previousOffset, sliceDisplayWidth * 2) * 0.58;
+        const sliceAngle = Math.atan2(nextOffset - previousOffset, sliceDisplayWidth * 2) * 0.72;
         const destinationX = -displayWidth / 2 + index * sliceDisplayWidth;
         ctx.save();
         ctx.translate(destinationX + sliceDisplayWidth / 2, offsetY);
@@ -1953,10 +2271,10 @@
   function drawWhaleSprite(x, y, scale, facing, tilt, alpha, now, swimPhase = now * 0.003, bend = 0.85) {
     drawSwimmingSprite({
       image: whaleSprite,
-      sourceX: 26,
-      sourceY: 154,
-      sourceWidth: 1623,
-      sourceHeight: 683,
+      sourceX: 0,
+      sourceY: 0,
+      sourceWidth: 1672,
+      sourceHeight: 941,
       displayWidth: 420 * scale,
       x,
       y,
@@ -1965,8 +2283,8 @@
       alpha,
       swimPhase,
       bend,
-      slices: 24,
-      bob: 4 * scale,
+      slices: width < 700 ? 24 : 30,
+      bob: 2.2 * scale,
     });
   }
 
@@ -1976,6 +2294,60 @@
       return;
     }
     drawWhaleSprite(x, y, scale, facing, tilt, alpha, now, swimPhase, bend);
+  }
+
+  function drawWhaleSanctum(x, y, scale, facing, tilt, alpha, now, intensity = 1) {
+    if (alpha <= 0.02) return;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(facing === 1 ? tilt : -tilt);
+    ctx.scale(scale, scale);
+    ctx.globalCompositeOperation = "lighter";
+
+    const aura = ctx.createRadialGradient(30, -4, 4, 12, 0, 250);
+    aura.addColorStop(0, `rgba(75, 230, 255, ${0.12 * alpha * intensity})`);
+    aura.addColorStop(0.34, `rgba(112, 76, 255, ${0.085 * alpha * intensity})`);
+    aura.addColorStop(0.7, `rgba(224, 69, 226, ${0.035 * alpha * intensity})`);
+    aura.addColorStop(1, "rgba(0, 0, 0, 0)");
+    ctx.fillStyle = aura;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 255, 94, 0, 0, TAU);
+    ctx.fill();
+
+    const orbitAlpha = (reducedMotion ? 0.08 : 0.13) * alpha * intensity;
+    ctx.lineCap = "round";
+    for (let index = 0; index < 3; index += 1) {
+      const orbit = now * (0.00008 + index * 0.000025) * (index % 2 ? -1 : 1);
+      ctx.save();
+      ctx.rotate(orbit);
+      ctx.strokeStyle = index === 2
+        ? `rgba(255, 207, 145, ${orbitAlpha * 0.72})`
+        : index === 1
+          ? `rgba(190, 102, 255, ${orbitAlpha})`
+          : `rgba(89, 232, 255, ${orbitAlpha})`;
+      ctx.lineWidth = 0.62 + index * 0.32;
+      ctx.setLineDash(index === 1 ? [4, 10] : index === 2 ? [2, 15] : []);
+      ctx.lineDashOffset = now * (index % 2 ? -0.004 : 0.003);
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 218 + index * 16, 57 + index * 10, -0.08 + index * 0.07, 0, TAU);
+      ctx.stroke();
+      ctx.restore();
+    }
+    ctx.setLineDash([]);
+
+    if (!reducedMotion) {
+      for (let index = 0; index < 11; index += 1) {
+        const starX = -176 + index * 34;
+        const starY = -40 - Math.sin(index * 0.72 + now * 0.00065) * (8 + index % 3 * 2);
+        const pulse = 0.38 + Math.sin(now * 0.0016 + index * 1.4) * 0.18;
+        ctx.globalAlpha = Math.max(0.08, pulse) * alpha * intensity;
+        ctx.fillStyle = index % 4 === 0 ? "#ffd69d" : index % 3 === 0 ? "#c98cff" : "#8ff4ff";
+        ctx.beginPath();
+        ctx.arc(starX, starY, index % 4 === 0 ? 1.25 : 0.72, 0, TAU);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
   }
 
   function drawBabyWhale(baby, now) {
@@ -2025,7 +2397,7 @@
       ctx.lineTo(last.x, last.y);
     };
 
-    const scale = activeWhaleScale(now);
+    const scale = whaleRenderScale(now);
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
     ctx.lineCap = "round";
@@ -2069,7 +2441,9 @@
       ctx.fill();
     });
     ctx.restore();
-    drawWhale(whale.x, whale.y, whaleScale() * 1.18, 1, -0.18, whale.reveal, now, whale.reveal < 0.55);
+    const birthScale = whaleScale() * 1.3;
+    drawWhaleSanctum(whale.x, whale.y, birthScale, 1, -0.18, whale.reveal, now, 0.92);
+    drawWhale(whale.x, whale.y, birthScale, 1, -0.18, whale.reveal, now, whale.reveal < 0.55);
   }
 
   function drawPortal(now) {
@@ -2227,24 +2601,24 @@
   function drawTitle(now) {
     if (!titleParticles.length) return;
     const age = (now - phaseStarted) / 1000;
-    if (titleGlow && age > 0.28) {
+    if (titleGlow && age > 0.5) {
       ctx.save();
       ctx.globalCompositeOperation = "lighter";
-      ctx.globalAlpha = clamp((age - 0.28) * 0.18, 0, 0.2);
+      ctx.globalAlpha = clamp((age - 0.5) * 0.22, 0, 0.32);
       ctx.drawImage(titleGlow, 0, 0);
       ctx.restore();
     }
-    if (titleCore && age > 0.42) {
+    if (titleCore && age > 0.92) {
       ctx.save();
       ctx.globalCompositeOperation = "source-over";
-      ctx.globalAlpha = clamp((age - 0.42) * 0.82, 0, 0.9);
+      ctx.globalAlpha = easeOutCubic(clamp((age - 0.92) / 1.05, 0, 1)) * 0.985;
       ctx.drawImage(titleCore, 0, 0);
       ctx.restore();
     }
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
-    if (age > 1.05) {
-      ctx.strokeStyle = `rgba(105, 225, 255, ${Math.min(0.24, (age - 1.05) * 0.12)})`;
+    if (age > 0.72) {
+      ctx.strokeStyle = `rgba(105, 225, 255, ${Math.min(0.28, (age - 0.72) * 0.13)})`;
       ctx.lineWidth = 0.8;
       for (let index = 0; index < titleParticles.length; index += 1) {
         const particle = titleParticles[index];
@@ -2261,9 +2635,9 @@
     for (let index = 0; index < titleParticles.length; index += 1) {
       const particle = titleParticles[index];
       const visible = clamp((age - particle.delay) * 2.4, 0, 1);
-      ctx.globalAlpha = visible * (0.74 + Math.sin(particle.phase) * 0.08);
-      ctx.fillStyle = index % 17 === 0 ? "#ffdca0" : index % 7 === 0 ? "#ffffff" : "#81eaff";
-      const size = particle.size * (index % 17 === 0 ? 1.8 : 1);
+      ctx.globalAlpha = visible * (0.82 + Math.sin(particle.phase) * 0.1);
+      ctx.fillStyle = index % 19 === 0 ? "#ffd59b" : index % 11 === 0 ? "#d58eff" : index % 7 === 0 ? "#ffffff" : "#82efff";
+      const size = particle.size * (index % 19 === 0 ? 1.9 : 1);
       ctx.beginPath();
       ctx.arc(particle.x, particle.y, size, 0, TAU);
       ctx.fill();
@@ -2279,17 +2653,71 @@
       }
     }
     ctx.restore();
+
+    if (age > 1.12 && titleLayout.length) {
+      const reveal = easeOutCubic(clamp((age - 1.12) / 1.2, 0, 1));
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      titleLayout.forEach((line, lineIndex) => {
+        const flareCount = lineIndex === titleLayout.length - 1 ? 7 : 5;
+        for (let index = 0; index < flareCount; index += 1) {
+          const progress = flareCount === 1 ? 0.5 : index / (flareCount - 1);
+          const x = width / 2 - line.width * 0.46 + line.width * 0.92 * progress;
+          const y = line.y + Math.sin(index * 2.7 + lineIndex + now * 0.0011) * line.size * 0.16;
+          const pulse = (0.45 + Math.sin(now * 0.002 + index * 1.8 + lineIndex) * 0.25) * reveal;
+          const ray = (lineIndex === 2 ? 5.5 : 4.2) + pulse * 4;
+          ctx.globalAlpha = Math.max(0.1, pulse);
+          ctx.strokeStyle = index % 3 === 0 ? "#ffd8a3" : index % 2 ? "#a98dff" : "#dfffff";
+          ctx.lineWidth = 0.7;
+          ctx.beginPath();
+          ctx.moveTo(x - ray, y);
+          ctx.lineTo(x + ray, y);
+          ctx.moveTo(x, y - ray * 1.65);
+          ctx.lineTo(x, y + ray * 1.65);
+          ctx.stroke();
+          ctx.fillStyle = "#ffffff";
+          ctx.beginPath();
+          ctx.arc(x, y, 0.8 + pulse, 0, TAU);
+          ctx.fill();
+        }
+      });
+      ctx.restore();
+    }
   }
 
-  function drawFireworks(now) {
+  function drawFireworks(now, layer = "all") {
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
+    for (const bloom of fireworkBlooms) {
+      const isNear = bloom.depth >= 0.95;
+      if (layer !== "all" && (layer === "near") !== isNear) continue;
+      const progress = clamp((now - bloom.born) / (bloom.life * 1000), 0, 1);
+      const life = 1 - progress;
+      const radius = easeOutCubic(progress) * (34 + bloom.depth * 42);
+      const glow = ctx.createRadialGradient(bloom.x, bloom.y, 0, bloom.x, bloom.y, Math.max(1, radius));
+      glow.addColorStop(0, `rgba(255, 255, 255, ${life * 0.9})`);
+      glow.addColorStop(0.16, bloom.color);
+      glow.addColorStop(1, "rgba(0, 0, 0, 0)");
+      ctx.globalAlpha = (isNear ? 0.72 : 0.38) * life;
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(bloom.x, bloom.y, radius, 0, TAU);
+      ctx.fill();
+      ctx.globalAlpha = life * (isNear ? 0.65 : 0.34);
+      ctx.strokeStyle = bloom.color;
+      ctx.lineWidth = 1 + bloom.depth * 1.4;
+      ctx.beginPath();
+      ctx.arc(bloom.x, bloom.y, radius * 1.18, 0, TAU);
+      ctx.stroke();
+    }
     for (const particle of fireworks) {
+      const isNear = particle.depth >= 0.95;
+      if (layer !== "all" && (layer === "near") !== isNear) continue;
       const life = 1 - particle.age / particle.life;
-      ctx.globalAlpha = life;
+      ctx.globalAlpha = life * (isNear ? 1 : 0.58);
       ctx.strokeStyle = particle.color;
       ctx.fillStyle = particle.color;
-      ctx.lineWidth = Math.max(0.5, particle.size * life * 0.8);
+      ctx.lineWidth = Math.max(0.45, particle.size * life * (isNear ? 0.9 : 0.58));
       if (particle.trail.length) {
         ctx.beginPath();
         ctx.moveTo(particle.x, particle.y);
@@ -2299,6 +2727,10 @@
       ctx.beginPath();
       ctx.arc(particle.x, particle.y, particle.size * (0.45 + life), 0, TAU);
       ctx.fill();
+    }
+    if (layer === "far") {
+      ctx.restore();
+      return;
     }
     for (const comet of comets) {
       const life = Math.sin(clamp(comet.age / comet.life, 0, 1) * Math.PI);
@@ -2320,6 +2752,30 @@
       const alpha = Math.sin(clamp(item.age / item.life, 0, 1) * Math.PI) * 0.8;
       drawWhale(item.x, item.y, item.scale, item.facing, -0.12, alpha, now, true);
     });
+  }
+
+  function drawFinaleForeground(now) {
+    if (phase !== "finale" && phase !== "epilogue") return;
+    const age = (now - phaseStarted) / 1000;
+    const reveal = easeOutCubic(clamp((age - 0.7) / 1.4, 0, 1));
+    if (reveal <= 0) return;
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    const count = reducedMotion ? 16 : width < 700 ? 28 : 42;
+    for (let index = 0; index < count; index += 1) {
+      const x = ((index * 97.31 + Math.sin(index * 2.17) * width * 0.17) % width + width) % width;
+      const travel = ((now * (0.012 + (index % 5) * 0.002) + index * 71) % (height * 0.62)) / (height * 0.62);
+      const y = -18 + travel * height * 0.62;
+      const alpha = Math.sin(travel * Math.PI) * reveal * (0.2 + (index % 4) * 0.075);
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = index % 9 === 0 ? "#ffd7a0" : index % 4 === 0 ? "#d28dff" : "#a9f6ff";
+      ctx.lineWidth = 0.55 + (index % 3) * 0.25;
+      ctx.beginPath();
+      ctx.moveTo(x, y - 5 - (index % 3) * 3);
+      ctx.lineTo(x, y + 5 + (index % 3) * 3);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   function render(now) {
@@ -2349,6 +2805,7 @@
     }
 
     drawSpace(now);
+    drawFinaleStage(now);
     drawPlanets(now);
     drawRipples(now);
     if (phase === "seed") drawSeed(now);
@@ -2356,23 +2813,38 @@
     if (phase === "hunt") drawWish(now);
     if (phase === "portal" || phase === "transition") drawPortal(now);
     drawParticles();
+    if (phase === "finale" || phase === "epilogue") {
+      drawFireworks(now, "far");
+      drawFireworks(now, "near");
+    }
 
     if (phase !== "seed" && phase !== "awakening") {
       drawWhaleTrail(now);
+      const renderScale = whaleRenderScale(now);
+      const sanctumIntensity = phase === "finale" || phase === "epilogue"
+        ? 1.18
+        : phase === "transition"
+          ? 0.88
+          : phase === "portal"
+            ? 0.66
+            : 0.42;
+      drawWhaleSanctum(
+        whale.x,
+        whale.y,
+        renderScale,
+        whale.facing,
+        whale.tilt,
+        whale.reveal,
+        now,
+        sanctumIntensity,
+      );
       babyWhales.forEach((baby) => {
         drawBabyWhale(baby, now);
       });
-      const transitionScale = phase === "transition"
-        ? 1 + easeOutCubic(clamp(((now - phaseStarted) / 1000 - 0.45) / 1.1, 0, 1)) * 0.42
-        : phase === "finale" || phase === "epilogue"
-          ? height > width
-            ? 1.34
-            : 1.05
-          : 1;
       drawWhale(
         whale.x,
         whale.y,
-        activeWhaleScale(now) * transitionScale,
+        renderScale,
         whale.facing,
         whale.tilt,
         whale.reveal,
@@ -2384,8 +2856,8 @@
     }
 
     if (phase === "finale" || phase === "epilogue") {
-      drawFireworks(now);
       drawTitle(now);
+      drawFinaleForeground(now);
     }
     drawTransition(now);
     drawProgress(now);
