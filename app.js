@@ -1589,6 +1589,79 @@
     }
   }
 
+  function sampleZoomWhalePath(item, progress) {
+    const value = clamp(progress, 0, 1);
+    const shortSide = Math.min(width, height);
+    const portrait = height > width;
+    const radialProgress = Math.pow(value, 1.08);
+    const angularProgress = easeInOutCubic(value);
+    const angle = item.baseAngle + TAU * item.turns * angularProgress;
+    const radius = shortSide * lerp(0.012, item.radiusFactor, radialProgress);
+    return {
+      x: item.originNX * width + Math.cos(angle) * radius * (portrait ? 0.78 : 1.16),
+      y: item.originNY * height + Math.sin(angle) * radius * (portrait ? 1.04 : 0.64)
+        - shortSide * 0.052 * Math.pow(value, 1.12),
+    };
+  }
+
+  function sampleZoomWhaleTangent(item, progress) {
+    const range = 0.004;
+    const from = sampleZoomWhalePath(item, Math.max(0, progress - range));
+    const to = sampleZoomWhalePath(item, Math.min(1, progress + range));
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const length = Math.max(0.001, Math.hypot(dx, dy));
+    return { x: dx / length, y: dy / length };
+  }
+
+  function triggerZoomWhaleFirework(item, now) {
+    const shortSide = Math.min(width, height);
+    const tangentX = item.tangentX;
+    const tangentY = item.tangentY;
+    const tailReach = 150 * whaleScale() * item.scale;
+    const spriteRotation = item.facing === 1 ? item.tilt : -item.tilt;
+    const localTailX = -item.facing * tailReach;
+    const fallbackTail = {
+      x: item.x + Math.cos(spriteRotation) * localTailX,
+      y: item.y + Math.sin(spriteRotation) * localTailX,
+    };
+    const tail = item.trail[0] || fallbackTail;
+    const side = item.podIndex % 2 ? 1 : -1;
+    const behindOffset = shortSide * 0.012;
+    const sideOffset = shortSide * (0.0015 + (item.podIndex % 3) * 0.0007) * side;
+    const x = clamp(
+      tail.x - tangentX * behindOffset - tangentY * sideOffset,
+      width * 0.055,
+      width * 0.945,
+    );
+    const y = clamp(
+      tail.y - tangentY * behindOffset + tangentX * sideOffset,
+      height * 0.08,
+      height * 0.9,
+    );
+    const styles = ["burst", "chrysanthemum", "halo"];
+    const style = styles[item.podIndex % styles.length];
+    const amountScale = reducedMotion ? 0.17 : width < 700 ? 0.23 : 0.29;
+    const depth = 0.88 + (item.podIndex % 3) * 0.08;
+    const grand = 0.42 + (item.podIndex % 4) * 0.1;
+    reserveFireworkCapacity(requestedFireworkParticles(style, amountScale));
+    spawnFirework(x, y, style, depth, amountScale, grand);
+    addRipple(x, y, item.podIndex % 2 ? "#c98cff" : "#75f2ff", 0, 0.46 + item.depth * 0.16);
+    emitParticles(x, y, reducedMotion ? 8 : width < 700 ? 15 : 22, {
+      angle: Math.atan2(tangentY, tangentX) + Math.PI,
+      spread: Math.PI * 0.62,
+      minSpeed: 45,
+      maxSpeed: 175,
+      minLife: 0.65,
+      maxLife: 1.45,
+      palette: ["#ffffff", "#7bf2ff", "#b07cff", "#ffd39e"],
+    });
+    screenFlash = Math.max(screenFlash, reducedMotion ? 0.08 : 0.16);
+    cameraKick = Math.max(cameraKick, reducedMotion ? 0 : 0.08);
+    if (item.podIndex % 3 === 0) audio.chime(item.podIndex % 5);
+    item.fireworkAt = now;
+  }
+
   function spawnWhalePod(x, y) {
     zoomWhales.length = 0;
     for (let index = magicQueue.length - 1; index >= 0; index -= 1) {
@@ -1604,21 +1677,22 @@
     podCelebration.chainEndsAt = -Infinity;
 
     const amount = reducedMotion ? 5 : width < 700 ? 8 : 10;
-    const travelBase = Math.min(width, height);
     podCelebration.total = amount;
     for (let index = 0; index < amount; index += 1) {
       const angle = -Math.PI / 2 + (index / amount) * TAU + (Math.random() - 0.5) * 0.12;
       const depth = 0.72 + Math.random() * 0.48;
-      const travelDuration = (reducedMotion ? 1.28 : 1.72) + index * 0.035 + Math.random() * 0.22;
+      const travelDuration = reducedMotion
+        ? 3.18 + Math.random() * 0.22
+        : 3.86 + (1.08 - depth) * 0.22 + Math.random() * 0.24;
       const portraitScale = height > width ? 0.86 : 0.62;
-      zoomWhales.push({
-        x: x + Math.cos(angle) * travelBase * 0.018,
-        y: y + Math.sin(angle) * travelBase * 0.012,
+      const item = {
+        x,
+        y,
         vx: 0,
         vy: 0,
         age: 0,
-        delay: index * (reducedMotion ? 0.06 : 0.095),
-        life: travelDuration + (reducedMotion ? 1.3 : 2.05) + Math.random() * 0.28,
+        delay: index * (reducedMotion ? 0.105 : 0.085),
+        life: travelDuration + (reducedMotion ? 0.92 : 1.35) + Math.random() * 0.22,
         travelDuration,
         startScale: 0.038 + Math.random() * 0.026,
         endScale: portraitScale * (0.84 + depth * 0.34 + Math.random() * 0.12),
@@ -1626,19 +1700,35 @@
         opacity: 0,
         depth,
         podId: podCelebration.id,
+        podIndex: index,
         originNX: x / width,
         originNY: y / height,
         baseAngle: angle,
-        turns: 1.18 + depth * 0.32 + Math.random() * 0.18,
-        radiusFactor: 0.37 + (index % 3) * 0.035 + Math.random() * 0.025,
+        turns: 1.05 + depth * 0.22 + Math.random() * 0.16,
+        radiusFactor: 0.34 + depth * 0.045 + (index % 3) * 0.028 + Math.random() * 0.02,
         spiralProgress: 0,
+        tangentX: 1,
+        tangentY: 0,
+        fireworkAtAge: reducedMotion
+          ? 2.62 + index * 0.13
+          : 3.18 + index * (width < 700 ? 0.14 : 0.13),
+        fireworkTriggered: false,
+        fireworkAt: -Infinity,
         facing: 1,
         tilt: -0.18,
         swimPhase: Math.random() * TAU,
         bend: 1.14 + Math.random() * 0.28,
         hue: -18 + index * 7,
         trail: [],
-      });
+      };
+      const start = sampleZoomWhalePath(item, 0);
+      const tangent = sampleZoomWhaleTangent(item, 0.01);
+      item.x = start.x;
+      item.y = start.y;
+      item.tangentX = tangent.x;
+      item.tangentY = tangent.y;
+      item.facing = tangent.x >= 0 ? 1 : -1;
+      zoomWhales.push(item);
     }
   }
 
@@ -1646,88 +1736,56 @@
     if (!podCelebration.active || podCelebration.fireworksTriggered) return;
     podCelebration.fireworksTriggered = true;
 
-    const chainAmount = reducedMotion ? 6 : width < 700 ? 10 : 14;
-    const amountScale = reducedMotion ? 0.36 : width < 700 ? 0.44 : 0.58;
-    const interval = reducedMotion ? 155 : width < 700 ? 112 : 92;
-    const chainBudget = reducedMotion ? 160 : width < 700 ? 480 : 810;
+    const amountScale = reducedMotion ? 0.24 : width < 700 ? 0.3 : 0.38;
+    const chainBudget = reducedMotion ? 90 : width < 700 ? 230 : 390;
     reserveFireworkCapacity(chainBudget);
 
-    screenFlash = Math.max(screenFlash, reducedMotion ? 0.32 : 0.72);
-    cameraKick = Math.max(cameraKick, reducedMotion ? 0 : 0.58);
+    screenFlash = Math.max(screenFlash, reducedMotion ? 0.2 : 0.42);
+    cameraKick = Math.max(cameraKick, reducedMotion ? 0 : 0.3);
     titleMagicAt = now;
     whale.finalReactionAt = now;
     whale.finalReactionKind = "pod";
     const centerX = podCelebration.centerNX * width;
     const centerY = podCelebration.centerNY * height;
-    [0, 120, 260].forEach((delay, index) => {
+    [0, 150].forEach((delay, index) => {
       celebrationWaves.push({
         x: centerX,
         y: centerY,
         born: now + delay,
-        life: 1.45 + index * 0.22,
+        life: 1.35 + index * 0.24,
         style: "pod",
         color: index === 2 ? "#ffd69a" : index === 1 ? "#d28cff" : "#83f5ff",
         index,
       });
     });
-    emitParticles(centerX, centerY, reducedMotion ? 42 : width < 700 ? 92 : 154, {
-      minSpeed: 90,
-      maxSpeed: 360,
+    emitParticles(centerX, centerY, reducedMotion ? 22 : width < 700 ? 48 : 72, {
+      minSpeed: 65,
+      maxSpeed: 240,
       minLife: 0.9,
       maxLife: 2.5,
       palette: ["#ffffff", "#75f2ff", "#9c7bff", "#ff8fcf", "#ffdda7"],
     });
 
-    const anchors = zoomWhales
-      .filter((item) => item.podId === podCelebration.id && item.spiralProgress >= 0.6)
-      .sort((first, second) => second.spiralProgress - first.spiralProgress);
-    const styles = ["chrysanthemum", "spiral", "burst", "halo", "tail"];
-    for (let index = 0; index < chainAmount; index += 1) {
-      const anchor = anchors[index % Math.max(1, anchors.length)];
-      const orbit = -Math.PI / 2 + index * 2.399963;
-      const fallbackNX = 0.5 + Math.cos(orbit) * (0.27 + (index % 3) * 0.035);
-      const fallbackNY = 0.43 + Math.sin(orbit) * (height > width ? 0.29 : 0.33);
-      const anchorNX = anchor ? anchor.x / width : fallbackNX;
-      const anchorNY = anchor ? anchor.y / height : fallbackNY;
-      const nx = lerp(anchorNX, fallbackNX, index < anchors.length ? 0.42 : 0.74);
-      const ny = lerp(anchorNY, fallbackNY, index < anchors.length ? 0.4 : 0.74);
-      queueMagicBurst(
-        now,
-        index * interval,
-        nx,
-        ny,
-        styles[index % styles.length],
-        0.82 + (index % 4) * 0.1,
-        {
-          amountScale: index === chainAmount - 1 ? amountScale * 1.28 : amountScale,
-          priority: true,
-          chime: index % 3 === 0 ? index % 5 : -1,
-          podId: podCelebration.id,
-          grand: 0.72 + (index % 4) * 0.18,
-        },
-      );
-    }
-
-    const finalDelay = chainAmount * interval + 140;
+    const finalDelay = reducedMotion ? 180 : 260;
     [0.25, 0.5, 0.75].forEach((nx, index) => {
-      queueMagicBurst(now, finalDelay + index * 90, nx, index === 1 ? 0.1 : 0.15, "chrysanthemum", 1.08 + index * 0.05, {
-        amountScale: amountScale * 1.18,
+      queueMagicBurst(now, finalDelay + index * 120, nx, index === 1 ? 0.1 : 0.15, "chrysanthemum", 1.02 + index * 0.05, {
+        amountScale,
         priority: true,
         chime: index === 1 ? 4 : -1,
         podId: podCelebration.id,
-        grand: 1.45,
+        grand: 0.9 + index * 0.08,
       });
     });
-    queueMagicBurst(now, finalDelay + 330, 0.5, 0.82, "halo", 1.22, {
-      amountScale: amountScale * 1.42,
+    queueMagicBurst(now, finalDelay + 520, 0.5, 0.84, "halo", 1.12, {
+      amountScale: amountScale * 1.12,
       priority: true,
       chime: 4,
       podId: podCelebration.id,
-      grand: 1.72,
+      grand: 1.08,
     });
-    podCelebration.chainEndsAt = now + finalDelay + 2350;
+    podCelebration.chainEndsAt = now + finalDelay + 2400;
     audio.whaleCall();
-    setPrompt("Cả đàn cá voi đã tới", "Pháo hoa đang chạy xuyên ngân hà", 2400);
+    setPrompt("Đàn cá voi đang mở hội", "Mỗi chiếc đuôi để lại một chùm pháo hoa", 2600);
   }
 
   function queueMagicBurst(now, delay, nx, ny, style, depth = 1, options = {}) {
@@ -1775,6 +1833,10 @@
   }
 
   function triggerPastieMagic(style, x, y, now) {
+    const magicX = style === "pod" ? width / 2 : x;
+    const magicY = style === "pod" && titleBounds
+      ? (titleBounds.top + titleBounds.bottom) / 2
+      : y;
     const reserved = reducedMotion
       ? style === "pod" ? 60 : 105
       : style === "pod"
@@ -1789,10 +1851,10 @@
     cameraKick = Math.max(cameraKick, reducedMotion ? 0 : 0.14 + force * 0.2);
 
     [0, 95, 210].forEach((delay, index) => {
-      addRipple(x, y, COLORS[(interactiveFirework + index) % COLORS.length], delay, 0.72 + force * 0.5 + index * 0.16);
+      addRipple(magicX, magicY, COLORS[(interactiveFirework + index) % COLORS.length], delay, 0.72 + force * 0.5 + index * 0.16);
       celebrationWaves.push({
-        x,
-        y,
+        x: magicX,
+        y: magicY,
         born: now + delay,
         life: 1.1 + index * 0.2 + force * 0.28,
         style,
@@ -1801,26 +1863,26 @@
       });
     });
 
-    const nx = x / width;
-    const ny = y / height;
+    const nx = magicX / width;
+    const ny = magicY / height;
     if (style === "tail") {
-      spawnFirework(x, y, "tail", 1.22);
+      spawnFirework(magicX, magicY, "tail", 1.22);
       queueMagicBurst(now, 170, nx - 0.22, ny - 0.1, "chrysanthemum", 0.88);
       queueMagicBurst(now, 310, nx + 0.22, ny - 0.12, "chrysanthemum", 0.94);
     } else if (style === "spiral") {
-      spawnFirework(x, y, "spiral", 1.24);
+      spawnFirework(magicX, magicY, "spiral", 1.24);
       queueMagicBurst(now, 90, nx, ny, "halo", 1.08);
       queueMagicBurst(now, 230, nx - 0.2, ny + 0.03, "spiral", 0.82);
       queueMagicBurst(now, 360, nx + 0.2, ny - 0.04, "spiral", 0.9);
     } else {
-      spawnWhalePod(x, y);
-      spawnFirework(x, y, "halo", 0.92, reducedMotion ? 0.28 : 0.38);
+      spawnWhalePod(magicX, magicY);
+      spawnFirework(magicX, magicY, "halo", 0.92, reducedMotion ? 0.2 : 0.28);
     }
 
     const magicParticleCount = style === "pod"
       ? reducedMotion ? 24 : width < 700 ? 48 : 76
       : reducedMotion ? 38 : width < 700 ? 78 : 126;
-    emitParticles(x, y, magicParticleCount, {
+    emitParticles(magicX, magicY, magicParticleCount, {
       minSpeed: 48,
       maxSpeed: style === "pod" ? 310 : 245,
       minLife: 0.8,
@@ -1879,34 +1941,47 @@
         continue;
       }
       const progress = clamp(localAge / item.travelDuration, 0, 1);
-      const eased = easeInOutCubic(progress);
-      const perspective = Math.pow(easeOutCubic(progress), 1.22);
       const afterTravel = Math.max(0, localAge - item.travelDuration);
-      const shortSide = Math.min(width, height);
-      const portrait = height > width;
-      const angle = item.baseAngle + TAU * item.turns * eased + afterTravel * 0.22;
-      const radius = shortSide * (
-        lerp(0.018, item.radiusFactor, easeOutCubic(progress))
-        + afterTravel * 0.028
-      );
-      const centerX = item.originNX * width;
-      const centerY = item.originNY * height;
-      const nextX = centerX + Math.cos(angle) * radius * (portrait ? 0.78 : 1.16);
-      const nextY = centerY + Math.sin(angle) * radius * (portrait ? 1.04 : 0.64)
-        - shortSide * (0.052 * progress + afterTravel * 0.018);
+      const endPath = sampleZoomWhalePath(item, 1);
+      const beforeEnd = sampleZoomWhalePath(item, 0.996);
+      const terminalFactor = 1 / (0.004 * item.travelDuration);
+      const path = progress < 1
+        ? sampleZoomWhalePath(item, progress)
+        : {
+            x: endPath.x + (endPath.x - beforeEnd.x) * terminalFactor * afterTravel,
+            y: endPath.y + (endPath.y - beforeEnd.y) * terminalFactor * afterTravel,
+          };
+      const tangent = progress < 1
+        ? sampleZoomWhaleTangent(item, progress)
+        : (() => {
+            const dx = endPath.x - beforeEnd.x;
+            const dy = endPath.y - beforeEnd.y;
+            const length = Math.max(0.001, Math.hypot(dx, dy));
+            return { x: dx / length, y: dy / length };
+          })();
+      const previousTangentX = item.tangentX;
+      const previousTangentY = item.tangentY;
       const safeDt = Math.max(0.001, dt);
-      item.vx = (nextX - item.x) / safeDt;
-      item.vy = (nextY - item.y) / safeDt;
-      item.x = nextX;
-      item.y = nextY;
+      item.vx = (path.x - item.x) / safeDt;
+      item.vy = (path.y - item.y) / safeDt;
+      item.x = path.x;
+      item.y = path.y;
+      item.tangentX = tangent.x;
+      item.tangentY = tangent.y;
       item.spiralProgress = progress;
-      item.scale = lerp(item.startScale, item.endScale, perspective) * (1 + Math.min(0.12, afterTravel * 0.045));
-      const fadeDuration = reducedMotion ? 0.46 : 0.82;
+      const perspective = Math.pow(progress, 1.28);
+      item.scale = lerp(item.startScale, item.endScale, perspective) * (1 + Math.min(0.1, afterTravel * 0.055));
+      const fadeDuration = reducedMotion ? 0.55 : 0.76;
       const fade = 1 - easeOutCubic(clamp((localAge - (item.life - fadeDuration)) / fadeDuration, 0, 1));
-      item.opacity = clamp(localAge / 0.18, 0, 1) * fade * (0.78 + item.depth * 0.17);
-      if (Math.abs(item.vx) > 8) item.facing = item.vx >= 0 ? 1 : -1;
-      item.tilt = lerp(item.tilt, clamp(Math.atan2(item.vy, Math.abs(item.vx) + 80) * 0.58, -0.42, 0.42), 1 - Math.exp(-4.2 * dt));
-      item.swimPhase += dt * (4 + item.depth * 2.1 + progress * 0.8);
+      item.opacity = clamp(localAge / 0.24, 0, 1) * fade * (0.78 + item.depth * 0.17);
+      if (tangent.x > 0.18) item.facing = 1;
+      else if (tangent.x < -0.18) item.facing = -1;
+      const desiredTilt = clamp(Math.atan2(tangent.y, Math.abs(tangent.x)), -0.68, 0.68);
+      item.tilt = lerp(item.tilt, desiredTilt, 1 - Math.exp(-3.6 * dt));
+      const turnStrength = Math.abs(previousTangentX * tangent.y - previousTangentY * tangent.x);
+      const bendTarget = 1.04 + progress * 0.18 + Math.min(0.32, turnStrength * 2.6);
+      item.bend = lerp(item.bend, bendTarget, 1 - Math.exp(-3.2 * dt));
+      item.swimPhase += dt * (2.55 + item.depth * 1.18 + progress * 0.92 + turnStrength * 2.4);
       if (!reducedMotion) {
         const tailReach = 150 * whaleScale() * item.scale;
         const spriteRotation = item.facing === 1 ? item.tilt : -item.tilt;
@@ -1915,20 +1990,24 @@
           x: item.x + Math.cos(spriteRotation) * localTailX,
           y: item.y + Math.sin(spriteRotation) * localTailX,
         });
-        if (item.trail.length > 12) item.trail.pop();
+        if (item.trail.length > (width < 700 ? 14 : 18)) item.trail.pop();
+      }
+      if (
+        !item.fireworkTriggered
+        && localAge >= item.fireworkAtAge
+        && item.opacity >= 0.62
+      ) {
+        item.fireworkTriggered = true;
+        triggerZoomWhaleFirework(item, now);
       }
     }
 
     if (podCelebration.active) {
       const currentPod = zoomWhales.filter((item) => item.podId === podCelebration.id);
-      podCelebration.arrived = currentPod.filter((item) => (
-        item.spiralProgress >= 0.74
-        && item.opacity >= 0.65
-        && item.scale / item.endScale >= 0.72
-      )).length;
+      podCelebration.arrived = currentPod.filter((item) => item.fireworkTriggered).length;
       if (
         !podCelebration.fireworksTriggered
-        && podCelebration.arrived >= Math.ceil(podCelebration.total * 0.75)
+        && podCelebration.arrived >= podCelebration.total
       ) {
         launchPodFireworkChain(now);
       }
