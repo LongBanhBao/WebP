@@ -54,6 +54,7 @@
   let interactiveFirework = 0;
   let lastMagicAt = 0;
   let titleMagicAt = -Infinity;
+  let titleMagicStyle = "";
   let lastCometAt = 0;
   let hiddenAt = 0;
   let promptTimer = 0;
@@ -992,6 +993,7 @@
     interactiveFirework = 0;
     lastMagicAt = 0;
     titleMagicAt = -Infinity;
+    titleMagicStyle = "";
     finaleEvents.forEach((event) => {
       event.played = false;
     });
@@ -1538,7 +1540,8 @@
     const velocityScale = clamp(effects.velocityScale ?? 1, 0.45, 1.4);
     const particleScale = clamp(effects.particleScale ?? 1, 0.55, 1.5);
     const rayScale = clamp(effects.rayScale ?? 1, 0.25, 1.4);
-    const fadePower = clamp(effects.fadePower ?? 1, 0.55, 1.35);
+    const bloomFadePower = clamp(effects.bloomFadePower ?? effects.fadePower ?? 1, 0.55, 1.5);
+    const particleFadePower = clamp(effects.particleFadePower ?? effects.fadePower ?? 1, 0.55, 1.5);
     const born = Number.isFinite(effects.born) ? effects.born : performance.now();
     if (!count && !effects.forceBloom) return;
     const hasCustomPalette = Array.isArray(paletteOverride) && paletteOverride.length > 0;
@@ -1562,7 +1565,7 @@
       intensity,
       radiusScale,
       rayScale,
-      fadePower,
+      fadePower: bloomFadePower,
       seed: Math.random() * TAU,
     });
     const addParticle = (vx, vy, color, size, life, gravity = 14) => {
@@ -1576,7 +1579,7 @@
         color,
         size: size * depth * particleScale,
         alpha: intensity,
-        fadePower,
+        fadePower: particleFadePower,
         depth,
         gravity: gravity * (effects.gravityScale ?? 1),
         trailLimit: depth < 0.9 ? 3 : depth > 1.08 ? 6 : 4,
@@ -1678,51 +1681,65 @@
     return { x: dx / length, y: dy / length };
   }
 
-  function triggerPodCrescendoFirework(item, level, volleyIndex, now) {
+  function podCrescendoProfile(level) {
     const maximumLevel = Math.max(1, podCelebration.total - 1);
-    const intensityLevel = clamp(level / maximumLevel, 0, 1);
-    const style = level <= 1
-      ? "burst"
-      : level % 3 === 0
-        ? "chrysanthemum"
-        : level % 2
-          ? "halo"
-          : "burst";
+    const stage = clamp(level, 0, maximumLevel);
+    const stageProgress = stage / maximumLevel;
     const amountScale = reducedMotion
-      ? 0.04 + intensityLevel * 0.06
+      ? 0.2 + stageProgress * 0.42
       : width < 700
-        ? 0.055 + intensityLevel * 0.12
-        : 0.07 + intensityLevel * 0.16;
-    const grand = 0.08 + intensityLevel * 1.05;
-    const depth = 0.9 + intensityLevel * 0.14 + (item.podIndex % 2) * 0.015;
-    const intensity = 0.28 + intensityLevel * 0.72;
+        ? 0.09 + stageProgress * 0.33
+        : 0.09 + stageProgress * 0.41;
+
+    return {
+      stage,
+      stageProgress,
+      style: "chrysanthemum",
+      amountScale,
+      grand: 0.04 + stageProgress * 1.4,
+      depth: 1.01 + stageProgress * 0.08,
+      intensity: 0.24 + stageProgress * 0.9,
+      radiusScale: 0.42 + stageProgress * 0.98,
+      bloomLifeScale: 0.72 + stageProgress * 1.16,
+      particleLifeScale: 1 + stageProgress * 0.84,
+      velocityScale: 0.62 + stageProgress * 0.46,
+      particleScale: 0.74 + stageProgress * 0.42,
+      rayScale: 0.34 + stageProgress * 0.88,
+      bloomFadePower: 1.12 - stageProgress * 0.5,
+      particleFadePower: 0.92 - stageProgress * 0.3,
+    };
+  }
+
+  function triggerPodCrescendoFirework(item, level, volleyIndex, now, profile) {
+    const fireworkProfile = profile || podCrescendoProfile(level);
 
     spawnFirework(
       item.x,
       item.y,
-      style,
-      depth,
-      amountScale,
-      grand,
+      fireworkProfile.style,
+      fireworkProfile.depth,
+      fireworkProfile.amountScale,
+      fireworkProfile.grand,
       POD_COLORS,
       {
-        intensity,
-        radiusScale: 0.45 + intensityLevel * 0.85,
-        bloomLifeScale: 1.35 + intensityLevel * 0.42,
-        particleLifeScale: 1.28 + intensityLevel * 0.4,
-        velocityScale: 0.72 + intensityLevel * 0.3,
-        particleScale: 0.82 + intensityLevel * 0.28,
-        gravityScale: 0.72,
-        rayScale: 0.42 + intensityLevel * 0.58,
-        fadePower: 0.66,
+        intensity: fireworkProfile.intensity,
+        radiusScale: fireworkProfile.radiusScale,
+        bloomLifeScale: fireworkProfile.bloomLifeScale,
+        particleLifeScale: fireworkProfile.particleLifeScale,
+        velocityScale: fireworkProfile.velocityScale,
+        particleScale: fireworkProfile.particleScale,
+        gravityScale: 0.64,
+        rayScale: fireworkProfile.rayScale,
+        bloomFadePower: fireworkProfile.bloomFadePower,
+        particleFadePower: fireworkProfile.particleFadePower,
         forceBloom: true,
         born: now,
       },
     );
 
-    item.celebrationLevel = Math.max(item.celebrationLevel, level);
+    item.celebrationLevel = Math.max(item.celebrationLevel, fireworkProfile.stage);
     item.lastBurstAt = now;
-    item.lastBurstIntensity = intensity;
+    item.lastBurstIntensity = fireworkProfile.intensity;
     item.lastVolley = volleyIndex;
   }
 
@@ -1736,8 +1753,21 @@
       ))
       .sort((first, second) => first.podIndex - second.podIndex);
 
-    visibleWhales.forEach((item) => {
-      triggerPodCrescendoFirework(item, newcomer.podIndex - item.podIndex, newcomer.podIndex, now);
+    const volley = visibleWhales.map((item) => {
+      const level = newcomer.podIndex - item.podIndex;
+      return { item, level, profile: podCrescendoProfile(level) };
+    });
+    const requestedParticles = volley.reduce(
+      (total, burst) => total + requestedFireworkParticles(
+        burst.profile.style,
+        burst.profile.amountScale,
+      ),
+      0,
+    );
+
+    reserveFireworkCapacity(requestedParticles);
+    volley.forEach(({ item, level, profile }) => {
+      triggerPodCrescendoFirework(item, level, newcomer.podIndex, now, profile);
     });
 
     podCelebration.visibleCount = Math.max(podCelebration.visibleCount, newcomer.podIndex + 1);
@@ -1779,8 +1809,8 @@
         : width < 700
           ? 6.5
           : 6.3;
-      const holdDuration = reducedMotion ? 0.45 : 0.72;
-      const fadeDuration = reducedMotion ? 0.72 : 0.92;
+      const holdDuration = reducedMotion ? 0.08 : 0.12;
+      const fadeDuration = reducedMotion ? 0.8 : 1.08;
       const fadeStartAge = travelDuration + holdDuration;
       const portraitScale = height > width ? 0.86 : 0.62;
       const item = {
@@ -1809,7 +1839,7 @@
         spiralProgress: 0,
         tangentX: 1,
         tangentY: 0,
-        entryFireworkAtAge: reducedMotion ? 0.3 : 0.32,
+        entryFireworkAtAge: reducedMotion ? 0.12 : 0.14,
         entryFireworkTriggered: false,
         entryFireworkAt: -Infinity,
         celebrationLevel: 0,
@@ -1906,27 +1936,35 @@
         : style === "spiral" ? 380 : 330;
     reserveFireworkCapacity(reserved);
     titleMagicAt = now;
+    titleMagicStyle = style;
     whale.finalReactionAt = now;
     whale.finalReactionKind = style;
-    const force = style === "pod" ? 1 : style === "spiral" ? 0.82 : 0.68;
-    screenFlash = Math.max(screenFlash, reducedMotion ? 0.22 : 0.34 + force * 0.2);
-    cameraKick = Math.max(cameraKick, reducedMotion ? 0 : 0.14 + force * 0.2);
+    const isPodMagic = style === "pod";
+    const force = isPodMagic ? 0.3 : style === "spiral" ? 0.82 : 0.68;
+    screenFlash = Math.max(
+      screenFlash,
+      isPodMagic ? reducedMotion ? 0.06 : 0.11 : reducedMotion ? 0.22 : 0.34 + force * 0.2,
+    );
+    cameraKick = Math.max(
+      cameraKick,
+      isPodMagic ? reducedMotion ? 0 : 0.045 : reducedMotion ? 0 : 0.14 + force * 0.2,
+    );
 
     const magicPalette = style === "pod" ? POD_COLORS : COLORS;
-    [0, 95, 210].forEach((delay, index) => {
-      addRipple(magicX, magicY, magicPalette[(interactiveFirework + index) % magicPalette.length], delay, 0.72 + force * 0.5 + index * 0.16);
-      celebrationWaves.push({
-        x: magicX,
-        y: magicY,
-        born: now + delay,
-        life: 1.1 + index * 0.2 + force * 0.28,
-        style,
-        color: style === "pod"
-          ? POD_COLORS[(index + 1) % POD_COLORS.length]
-          : index === 2 ? "#ffd69a" : index === 1 ? "#c486ff" : "#70efff",
-        index,
+    if (!isPodMagic) {
+      [0, 95, 210].forEach((delay, index) => {
+        addRipple(magicX, magicY, magicPalette[(interactiveFirework + index) % magicPalette.length], delay, 0.72 + force * 0.5 + index * 0.16);
+        celebrationWaves.push({
+          x: magicX,
+          y: magicY,
+          born: now + delay,
+          life: 1.1 + index * 0.2 + force * 0.28,
+          style,
+          color: index === 2 ? "#ffd69a" : index === 1 ? "#c486ff" : "#70efff",
+          index,
+        });
       });
-    });
+    }
 
     const nx = magicX / width;
     const ny = magicY / height;
@@ -1944,13 +1982,13 @@
     }
 
     const magicParticleCount = style === "pod"
-      ? reducedMotion ? 24 : width < 700 ? 48 : 76
+      ? reducedMotion ? 8 : width < 700 ? 14 : 22
       : reducedMotion ? 38 : width < 700 ? 78 : 126;
     emitParticles(magicX, magicY, magicParticleCount, {
-      minSpeed: 48,
-      maxSpeed: style === "pod" ? 310 : 245,
-      minLife: 0.8,
-      maxLife: 2.2,
+      minSpeed: isPodMagic ? 22 : 48,
+      maxSpeed: isPodMagic ? 92 : 245,
+      minLife: isPodMagic ? 0.48 : 0.8,
+      maxLife: isPodMagic ? 1.12 : 2.2,
       palette: style === "pod" ? POD_COLORS : ["#ffffff", "#6cefff", "#a477ff", "#ff8ed0", "#ffd49b"],
     });
   }
@@ -2068,7 +2106,7 @@
       if (
         !item.entryFireworkTriggered
         && localAge >= item.entryFireworkAtAge
-        && item.opacity >= 0.62
+        && item.opacity >= 0.38
       ) {
         item.entryFireworkTriggered = true;
         item.entryFireworkAt = now;
@@ -3222,8 +3260,9 @@
     const age = (now - phaseStarted) / 1000;
     const magicAge = (now - titleMagicAt) / 1000;
     const magicProgress = clamp(magicAge / 1.15, 0, 1);
+    const magicStrength = titleMagicStyle === "pod" ? 0.26 : 1;
     const magicPulse = magicAge >= 0 && magicAge < 1.15
-      ? Math.sin(magicProgress * Math.PI) * (1 - magicProgress * 0.32)
+      ? Math.sin(magicProgress * Math.PI) * (1 - magicProgress * 0.32) * magicStrength
       : 0;
     const magicCenterX = titleMagicOrigin?.x ?? width / 2;
     const magicCenterY = titleMagicOrigin?.y ?? height * 0.405;
@@ -3632,9 +3671,10 @@
 
     const coreRadius = shortSide * (0.025 + build * 0.035);
     const core = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, coreRadius);
-    core.addColorStop(0, `rgba(255, 255, 255, ${0.72 * chainFade})`);
-    core.addColorStop(0.22, `rgba(84, 238, 255, ${0.52 * chainFade})`);
-    core.addColorStop(0.62, `rgba(35, 116, 255, ${0.22 * chainFade})`);
+    core.addColorStop(0, "rgba(0, 0, 0, 0)");
+    core.addColorStop(0.2, `rgba(185, 251, 255, ${0.06 * chainFade})`);
+    core.addColorStop(0.48, `rgba(84, 226, 255, ${0.2 * chainFade})`);
+    core.addColorStop(0.74, `rgba(35, 116, 255, ${0.09 * chainFade})`);
     core.addColorStop(1, "rgba(0, 0, 0, 0)");
     ctx.globalAlpha = build;
     ctx.fillStyle = core;
@@ -3659,14 +3699,15 @@
       const burstPulse = Number.isFinite(item.lastBurstAt) && burstAge >= 0 && burstAge < 2.8
         ? Math.pow(1 - burstAge / 2.8, 0.72)
         : 0;
-      if (levelProgress > 0 || burstPulse > 0) {
+      const burstStrength = burstPulse * clamp(item.lastBurstIntensity, 0.18, 1.2);
+      if (levelProgress > 0 || burstStrength > 0) {
         const auraRadius = Math.max(
           18,
-          330 * scale * (0.22 + levelProgress * 0.09 + burstPulse * 0.06),
+          330 * scale * (0.2 + levelProgress * 0.1 + burstStrength * 0.08),
         );
         const aura = ctx.createRadialGradient(item.x, item.y, 0, item.x, item.y, auraRadius);
-        aura.addColorStop(0, `rgba(229, 253, 255, ${(0.12 + burstPulse * 0.18) * item.opacity})`);
-        aura.addColorStop(0.32, `rgba(75, 231, 255, ${(0.1 + levelProgress * 0.16) * item.opacity})`);
+        aura.addColorStop(0, `rgba(229, 253, 255, ${(0.07 + burstStrength * 0.24) * item.opacity})`);
+        aura.addColorStop(0.32, `rgba(75, 231, 255, ${(0.08 + levelProgress * 0.16 + burstStrength * 0.05) * item.opacity})`);
         aura.addColorStop(0.72, `rgba(34, 105, 255, ${(0.05 + levelProgress * 0.09) * item.opacity})`);
         aura.addColorStop(1, "rgba(0, 0, 0, 0)");
         ctx.save();
