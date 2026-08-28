@@ -20,6 +20,7 @@
   const TAU = Math.PI * 2;
   const COLORS = ["#54efff", "#168cff", "#9a62ff", "#ff78bd", "#ffd78c"];
   const POD_COLORS = ["#f2fdff", "#a4f8ff", "#58e8ff", "#1f9cff", "#2857ff"];
+  const POD_FIREWORK_COLORS = ["#ffffff", "#c9fcff", "#53f3ff", "#19baff", "#4f86ff"];
   const TITLE_PARTICLE_COLORS = ["#ffffff", "#bdfbff", "#67eaff", "#6d9cff", "#c89cff", "#ffd69a"];
   const TITLE_ACCENT_COLORS = ["#ffffff", "#d9fdff", "#7ff4ff", "#4fafff", "#a994ff", "#ffe0a8"];
   const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -1661,7 +1662,7 @@
     const shortSide = Math.min(width, height);
     const portrait = height > width;
     const radialProgress = Math.pow(value, 1.08);
-    const angularProgress = lerp(value, easeInOutCubic(value), 0.35);
+    const angularProgress = lerp(value, easeInOutCubic(value), 0.12);
     const angle = item.baseAngle + TAU * item.turns * angularProgress;
     const radius = shortSide * lerp(0.002, item.radiusFactor, radialProgress);
     return {
@@ -1698,13 +1699,13 @@
       amountScale,
       grand: 0.04 + stageProgress * 1.4,
       depth: 1.01 + stageProgress * 0.08,
-      intensity: 0.24 + stageProgress * 0.9,
+      intensity: 0.24 + stageProgress * 0.96,
       radiusScale: 0.42 + stageProgress * 0.98,
       bloomLifeScale: 0.72 + stageProgress * 1.16,
       particleLifeScale: 1 + stageProgress * 0.84,
       velocityScale: 0.62 + stageProgress * 0.46,
-      particleScale: 0.74 + stageProgress * 0.42,
-      rayScale: 0.34 + stageProgress * 0.88,
+      particleScale: 0.74 + stageProgress * 0.48,
+      rayScale: 0.34 + stageProgress * 0.96,
       bloomFadePower: 1.12 - stageProgress * 0.5,
       particleFadePower: 0.92 - stageProgress * 0.3,
     };
@@ -1720,7 +1721,7 @@
       fireworkProfile.depth,
       fireworkProfile.amountScale,
       fireworkProfile.grand,
-      POD_COLORS,
+      POD_FIREWORK_COLORS,
       {
         intensity: fireworkProfile.intensity,
         radiusScale: fireworkProfile.radiusScale,
@@ -1780,7 +1781,7 @@
 
     if (podCelebration.visibleCount >= podCelebration.total && !Number.isFinite(podCelebration.allVisibleAt)) {
       podCelebration.allVisibleAt = now;
-      setPrompt("Đàn cá voi đã hội tụ", "Ba vòng xoắn ốc đang mở ra giữa ngân hà", 2600);
+      setPrompt("Đàn cá voi đã hội tụ", "Hai vòng xoắn ốc đang mở ra giữa ngân hà", 2600);
     }
   }
 
@@ -1834,7 +1835,7 @@
         originNX: x / width,
         originNY: y / height,
         baseAngle: angle,
-        turns: 3,
+        turns: 2,
         radiusFactor: 0.43 + depth * 0.05 + (index % 3) * 0.012,
         spiralProgress: 0,
         tangentX: 1,
@@ -3488,7 +3489,7 @@
       const isNear = particle.depth >= 0.95;
       if (layer !== "all" && (layer === "near") !== isNear) continue;
       const life = Math.pow(1 - particle.age / particle.life, particle.fadePower || 1);
-      ctx.globalAlpha = life * (particle.alpha ?? 1) * (isNear ? 1 : 0.58);
+      ctx.globalAlpha = clamp(life * (particle.alpha ?? 1) * (isNear ? 1 : 0.58), 0, 1);
       ctx.strokeStyle = particle.color;
       ctx.fillStyle = particle.color;
       ctx.lineWidth = Math.max(0.45, particle.size * life * (isNear ? 0.9 : 0.58));
