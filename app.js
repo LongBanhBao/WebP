@@ -20,6 +20,8 @@
   const TAU = Math.PI * 2;
   const COLORS = ["#54efff", "#168cff", "#9a62ff", "#ff78bd", "#ffd78c"];
   const POD_COLORS = ["#f2fdff", "#a4f8ff", "#58e8ff", "#1f9cff", "#2857ff"];
+  const TITLE_PARTICLE_COLORS = ["#ffffff", "#bdfbff", "#67eaff", "#6d9cff", "#c89cff", "#ffd69a"];
+  const TITLE_ACCENT_COLORS = ["#ffffff", "#d9fdff", "#7ff4ff", "#4fafff", "#a994ff", "#ffe0a8"];
   const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
   let reducedMotion = motionPreference.matches;
   let maxParticles = reducedMotion ? 520 : 1500;
@@ -75,10 +77,10 @@
     centerNX: 0.5,
     centerNY: 0.52,
     total: 0,
-    arrived: 0,
-    fireworksTriggered: false,
+    visibleCount: 0,
+    allVisibleAt: -Infinity,
     startedAt: -Infinity,
-    chainEndsAt: -Infinity,
+    endingAt: -Infinity,
   };
   const vortexDust = [];
   const warpStreaks = [];
@@ -983,10 +985,10 @@
     magicQueue.length = 0;
     podCelebration.active = false;
     podCelebration.total = 0;
-    podCelebration.arrived = 0;
-    podCelebration.fireworksTriggered = false;
+    podCelebration.visibleCount = 0;
+    podCelebration.allVisibleAt = -Infinity;
     podCelebration.startedAt = -Infinity;
-    podCelebration.chainEndsAt = -Infinity;
+    podCelebration.endingAt = -Infinity;
     interactiveFirework = 0;
     lastMagicAt = 0;
     titleMagicAt = -Infinity;
@@ -1046,12 +1048,12 @@
     const lines = portrait
       ? [
           { text: "PASTEL", size: Math.min(width * 0.16, height * 0.078, 108), y: height * 0.282, tracking: 0.06 },
-          { text: "DE", size: Math.min(width * 0.23, height * 0.105, 150), y: height * 0.405, tracking: 0.105 },
+          { text: "DE", size: Math.min(width * 0.185, height * 0.083, 112), y: height * 0.405, tracking: 0.105 },
           { text: "WHALE", size: Math.min(width * 0.175, height * 0.09, 138), y: height * 0.53, tracking: 0.07 },
         ]
       : [
           { text: "PASTEL", size: Math.min(width * 0.085, height * 0.095, 100), y: height * 0.265, tracking: 0.06 },
-          { text: "DE", size: Math.min(width * 0.12, height * 0.14, 140), y: height * 0.395, tracking: 0.11 },
+          { text: "DE", size: Math.min(width * 0.085, height * 0.105, 104), y: height * 0.395, tracking: 0.105 },
           { text: "WHALE", size: Math.min(width * 0.11, height * 0.135, 145), y: height * 0.535, tracking: 0.075 },
         ];
     const fontFamily = '"Palatino Linotype", Georgia, "Times New Roman", serif';
@@ -1064,10 +1066,10 @@
     maskContext.lineCap = "round";
     maskContext.textAlign = "center";
     maskContext.textBaseline = "middle";
-    lines.forEach((line) => {
+    lines.forEach((line, index) => {
       line.trackingPx = line.size * line.tracking;
       maskContext.font = `900 ${line.size}px ${fontFamily}`;
-      maskContext.lineWidth = Math.max(3, line.size * 0.046);
+      maskContext.lineWidth = Math.max(3.2, line.size * (index === 1 ? 0.06 : 0.052));
       drawTrackedText(maskContext, line.text, width / 2, line.y, line.trackingPx, "stroke");
     });
 
@@ -1084,28 +1086,32 @@
       const lineWidth = measureTrackedText(coreContext, line.text, line.trackingPx);
       line.width = lineWidth;
 
-      coreContext.strokeStyle = "rgba(0, 4, 24, 0.98)";
-      coreContext.lineWidth = Math.max(5.5, line.size * 0.12);
+      coreContext.strokeStyle = isAccent ? "rgba(0, 7, 30, 0.62)" : "rgba(0, 5, 27, 0.78)";
+      coreContext.lineWidth = Math.max(3.8, line.size * (isAccent ? 0.078 : 0.09));
       drawTrackedText(coreContext, line.text, width / 2, line.y, line.trackingPx, "stroke");
 
       const edge = coreContext.createLinearGradient(width / 2 - lineWidth / 2, 0, width / 2 + lineWidth / 2, 0);
-      edge.addColorStop(0, "rgba(44, 132, 255, 0.98)");
-      edge.addColorStop(0.5, "rgba(100, 240, 255, 0.99)");
-      edge.addColorStop(1, isAccent ? "rgba(224, 253, 255, 0.99)" : "rgba(77, 168, 255, 0.97)");
+      edge.addColorStop(0, "rgba(48, 126, 255, 0.76)");
+      edge.addColorStop(0.42, "rgba(105, 241, 255, 0.9)");
+      edge.addColorStop(0.72, "rgba(180, 128, 255, 0.74)");
+      edge.addColorStop(1, isAccent ? "rgba(255, 220, 166, 0.72)" : "rgba(89, 168, 255, 0.76)");
       coreContext.strokeStyle = edge;
-      coreContext.lineWidth = Math.max(2.8, line.size * 0.052);
+      coreContext.lineWidth = Math.max(1.7, line.size * (isAccent ? 0.036 : 0.04));
       drawTrackedText(coreContext, line.text, width / 2, line.y, line.trackingPx, "stroke");
 
       const crystal = coreContext.createLinearGradient(0, line.y - line.size * 0.58, 0, line.y + line.size * 0.58);
       crystal.addColorStop(0, "#ffffff");
-      crystal.addColorStop(0.28, "#e7fbff");
-      crystal.addColorStop(0.63, isAccent ? "#6ef0ff" : "#a9e9ff");
-      crystal.addColorStop(1, isAccent ? "#1c78ff" : "#3f75e8");
+      crystal.addColorStop(0.3, "#c8faff");
+      crystal.addColorStop(0.66, isAccent ? "#8c9dff" : "#84e8ff");
+      crystal.addColorStop(1, isAccent ? "#b77dff" : "#557ee8");
+      coreContext.save();
+      coreContext.globalAlpha = isAccent ? 0.1 : 0.17;
       coreContext.fillStyle = crystal;
       drawTrackedText(coreContext, line.text, width / 2, line.y, line.trackingPx, "fill");
+      coreContext.restore();
 
-      coreContext.strokeStyle = "rgba(255, 255, 255, 0.86)";
-      coreContext.lineWidth = Math.max(1, line.size * 0.018);
+      coreContext.strokeStyle = "rgba(239, 254, 255, 0.52)";
+      coreContext.lineWidth = Math.max(0.75, line.size * 0.012);
       drawTrackedText(coreContext, line.text, width / 2, line.y - line.size * 0.01, line.trackingPx, "stroke");
     });
 
@@ -1119,8 +1125,8 @@
     titleGlow.width = width;
     titleGlow.height = height;
     const glowContext = titleGlow.getContext("2d");
-    glowContext.filter = `blur(${reducedMotion ? 6 : width < 700 ? 10 : 15}px)`;
-    glowContext.globalAlpha = 0.94;
+    glowContext.filter = `blur(${reducedMotion ? 8 : width < 700 ? 12 : 18}px)`;
+    glowContext.globalAlpha = 0.58;
     glowContext.drawImage(titleCore, 0, 0);
 
     const image = maskContext.getImageData(0, 0, width, height).data;
@@ -1136,6 +1142,10 @@
       for (let x = 0; x < width && points.length < maximum; x += step) {
         const alpha = image[(y * width + x) * 4 + 3];
         if (alpha > 62) {
+          const lineIndex = lines.reduce((closest, line, candidateIndex) => (
+            Math.abs(y - line.y) < Math.abs(y - lines[closest].y) ? candidateIndex : closest
+          ), 0);
+          const accent = lineIndex === 1;
           const point = {
             x: settled ? x : portal.x + (Math.random() - 0.5) * 46,
             y: settled ? y : portal.y + (Math.random() - 0.5) * 46,
@@ -1144,8 +1154,11 @@
             vx: (Math.random() - 0.5) * 65,
             vy: (Math.random() - 0.5) * 65,
             delay: settled ? 0 : 0.24 + Math.random() * 1.02,
-            size: 0.78 + Math.random() * 1.45,
+            size: (accent ? 0.9 : 0.78) + Math.random() * (accent ? 1.62 : 1.45),
             phase: Math.random() * TAU,
+            tone: Math.random(),
+            accent,
+            lineIndex,
             link: previousInRow,
           };
           points.push(point);
@@ -1505,11 +1518,29 @@
     }
   }
 
-  function spawnFirework(x, y, style = "burst", depth = 1, amountScale = 1, grand = 0, paletteOverride = null) {
+  function spawnFirework(
+    x,
+    y,
+    style = "burst",
+    depth = 1,
+    amountScale = 1,
+    grand = 0,
+    paletteOverride = null,
+    effects = {},
+  ) {
     const cap = reducedMotion ? 420 : width < 700 ? 640 : 900;
     const requested = requestedFireworkParticles(style, amountScale);
     const count = Math.max(0, Math.min(requested, cap - fireworks.length));
-    if (!count) return;
+    const intensity = clamp(effects.intensity ?? 1, 0.08, 1.35);
+    const radiusScale = clamp(effects.radiusScale ?? 1, 0.35, 1.65);
+    const bloomLifeScale = clamp(effects.bloomLifeScale ?? effects.lifeScale ?? 1, 0.6, 2.2);
+    const particleLifeScale = clamp(effects.particleLifeScale ?? effects.lifeScale ?? 1, 0.6, 2.2);
+    const velocityScale = clamp(effects.velocityScale ?? 1, 0.45, 1.4);
+    const particleScale = clamp(effects.particleScale ?? 1, 0.55, 1.5);
+    const rayScale = clamp(effects.rayScale ?? 1, 0.25, 1.4);
+    const fadePower = clamp(effects.fadePower ?? 1, 0.55, 1.35);
+    const born = Number.isFinite(effects.born) ? effects.born : performance.now();
+    if (!count && !effects.forceBloom) return;
     const hasCustomPalette = Array.isArray(paletteOverride) && paletteOverride.length > 0;
     const palette = hasCustomPalette ? paletteOverride : COLORS;
     const bloomColor = hasCustomPalette
@@ -1522,26 +1553,32 @@
     fireworkBlooms.push({
       x,
       y,
-      born: performance.now(),
-      life: (style === "halo" ? 1.35 : 0.95) + grand * 0.58,
+      born,
+      life: ((style === "halo" ? 1.35 : 0.95) + grand * 0.58) * bloomLifeScale,
       color: bloomColor,
       palette: hasCustomPalette ? palette.slice() : null,
       depth,
       grand,
+      intensity,
+      radiusScale,
+      rayScale,
+      fadePower,
       seed: Math.random() * TAU,
     });
     const addParticle = (vx, vy, color, size, life, gravity = 14) => {
       fireworks.push({
         x,
         y,
-        vx,
-        vy,
+        vx: vx * velocityScale,
+        vy: vy * velocityScale,
         age: 0,
-        life,
+        life: life * particleLifeScale,
         color,
-        size: size * depth,
+        size: size * depth * particleScale,
+        alpha: intensity,
+        fadePower,
         depth,
-        gravity,
+        gravity: gravity * (effects.gravityScale ?? 1),
         trailLimit: depth < 0.9 ? 3 : depth > 1.08 ? 6 : 4,
         trail: [],
       });
@@ -1641,64 +1678,80 @@
     return { x: dx / length, y: dy / length };
   }
 
-  function triggerZoomWhaleFirework(item, now, moment = "exit") {
-    const isEntry = moment === "entry";
-    const shortSide = Math.min(width, height);
-    const tangentX = item.tangentX;
-    const tangentY = item.tangentY;
-    const tailReach = 150 * whaleScale() * item.scale;
-    const spriteRotation = item.facing === 1 ? item.tilt : -item.tilt;
-    const localTailX = -item.facing * tailReach;
-    const fallbackTail = {
-      x: item.x + Math.cos(spriteRotation) * localTailX,
-      y: item.y + Math.sin(spriteRotation) * localTailX,
-    };
-    const tail = item.trail[0] || fallbackTail;
-    const side = item.podIndex % 2 ? 1 : -1;
-    const behindOffset = shortSide * (isEntry ? 0.004 : 0.012);
-    const sideOffset = shortSide * (0.0012 + (item.podIndex % 3) * 0.0006) * side;
-    const x = clamp(
-      tail.x - tangentX * behindOffset - tangentY * sideOffset,
-      width * 0.055,
-      width * 0.945,
+  function triggerPodCrescendoFirework(item, level, volleyIndex, now) {
+    const maximumLevel = Math.max(1, podCelebration.total - 1);
+    const intensityLevel = clamp(level / maximumLevel, 0, 1);
+    const style = level <= 1
+      ? "burst"
+      : level % 3 === 0
+        ? "chrysanthemum"
+        : level % 2
+          ? "halo"
+          : "burst";
+    const amountScale = reducedMotion
+      ? 0.04 + intensityLevel * 0.06
+      : width < 700
+        ? 0.055 + intensityLevel * 0.12
+        : 0.07 + intensityLevel * 0.16;
+    const grand = 0.08 + intensityLevel * 1.05;
+    const depth = 0.9 + intensityLevel * 0.14 + (item.podIndex % 2) * 0.015;
+    const intensity = 0.28 + intensityLevel * 0.72;
+
+    spawnFirework(
+      item.x,
+      item.y,
+      style,
+      depth,
+      amountScale,
+      grand,
+      POD_COLORS,
+      {
+        intensity,
+        radiusScale: 0.45 + intensityLevel * 0.85,
+        bloomLifeScale: 1.35 + intensityLevel * 0.42,
+        particleLifeScale: 1.28 + intensityLevel * 0.4,
+        velocityScale: 0.72 + intensityLevel * 0.3,
+        particleScale: 0.82 + intensityLevel * 0.28,
+        gravityScale: 0.72,
+        rayScale: 0.42 + intensityLevel * 0.58,
+        fadePower: 0.66,
+        forceBloom: true,
+        born: now,
+      },
     );
-    const y = clamp(
-      tail.y - tangentY * behindOffset + tangentX * sideOffset,
-      height * 0.08,
-      height * 0.9,
-    );
-    const styles = isEntry ? ["burst", "halo"] : ["chrysanthemum", "halo", "burst"];
-    const style = styles[item.podIndex % styles.length];
-    const amountScale = isEntry
-      ? reducedMotion ? 0.12 : width < 700 ? 0.15 : 0.19
-      : reducedMotion ? 0.22 : width < 700 ? 0.28 : 0.36;
-    const depth = isEntry ? 0.84 + (item.podIndex % 3) * 0.04 : 1 + (item.podIndex % 3) * 0.08;
-    const grand = isEntry ? 0.28 + (item.podIndex % 3) * 0.05 : 0.76 + (item.podIndex % 4) * 0.09;
-    reserveFireworkCapacity(requestedFireworkParticles(style, amountScale));
-    spawnFirework(x, y, style, depth, amountScale, grand, POD_COLORS);
-    addRipple(
-      x,
-      y,
-      POD_COLORS[(item.podIndex + (isEntry ? 1 : 2)) % POD_COLORS.length],
-      0,
-      isEntry ? 0.34 + item.depth * 0.1 : 0.66 + item.depth * 0.2,
-    );
-    emitParticles(x, y, isEntry
-      ? reducedMotion ? 5 : width < 700 ? 8 : 12
-      : reducedMotion ? 10 : width < 700 ? 18 : 26, {
-      angle: Math.atan2(tangentY, tangentX) + Math.PI,
-      spread: Math.PI * (isEntry ? 0.44 : 0.72),
-      minSpeed: isEntry ? 28 : 58,
-      maxSpeed: isEntry ? 105 : 220,
-      minLife: isEntry ? 0.48 : 0.72,
-      maxLife: isEntry ? 1.05 : 1.65,
-      palette: POD_COLORS,
+
+    item.celebrationLevel = Math.max(item.celebrationLevel, level);
+    item.lastBurstAt = now;
+    item.lastBurstIntensity = intensity;
+    item.lastVolley = volleyIndex;
+  }
+
+  function triggerPodCrescendoVolley(newcomer, now) {
+    const visibleWhales = zoomWhales
+      .filter((item) => (
+        item.podId === podCelebration.id
+        && item.entryFireworkTriggered
+        && item.podIndex <= newcomer.podIndex
+        && item.opacity > 0.08
+      ))
+      .sort((first, second) => first.podIndex - second.podIndex);
+
+    visibleWhales.forEach((item) => {
+      triggerPodCrescendoFirework(item, newcomer.podIndex - item.podIndex, newcomer.podIndex, now);
     });
-    screenFlash = Math.max(screenFlash, reducedMotion ? 0.04 : isEntry ? 0.055 : 0.18);
-    cameraKick = Math.max(cameraKick, reducedMotion || isEntry ? 0 : 0.09);
-    if (item.podIndex % (isEntry ? 5 : 3) === 0) audio.chime(item.podIndex % 5);
-    if (isEntry) item.entryFireworkAt = now;
-    else item.exitFireworkAt = now;
+
+    podCelebration.visibleCount = Math.max(podCelebration.visibleCount, newcomer.podIndex + 1);
+    const stageProgress = podCelebration.visibleCount / Math.max(1, podCelebration.total);
+    screenFlash = Math.max(screenFlash, reducedMotion ? 0.025 : 0.035 + stageProgress * 0.07);
+    if (!reducedMotion && stageProgress > 0.78) {
+      cameraKick = Math.max(cameraKick, 0.025 + (stageProgress - 0.78) * 0.12);
+    }
+    audio.chime(newcomer.podIndex % 5);
+
+    if (podCelebration.visibleCount >= podCelebration.total && !Number.isFinite(podCelebration.allVisibleAt)) {
+      podCelebration.allVisibleAt = now;
+      setPrompt("Đàn cá voi đã hội tụ", "Ba vòng xoắn ốc đang mở ra giữa ngân hà", 2600);
+    }
   }
 
   function spawnWhalePod(x, y) {
@@ -1710,23 +1763,25 @@
     podCelebration.active = true;
     podCelebration.centerNX = x / width;
     podCelebration.centerNY = y / height;
-    podCelebration.arrived = 0;
-    podCelebration.fireworksTriggered = false;
+    podCelebration.visibleCount = 0;
+    podCelebration.allVisibleAt = -Infinity;
     podCelebration.startedAt = performance.now();
-    podCelebration.chainEndsAt = -Infinity;
+    podCelebration.endingAt = -Infinity;
 
     const amount = reducedMotion ? 5 : width < 700 ? 8 : 10;
-    const delayStep = reducedMotion ? 0.22 : width < 700 ? 0.19 : 0.18;
+    const delayStep = reducedMotion ? 0.34 : width < 700 ? 0.3 : 0.28;
     podCelebration.total = amount;
     for (let index = 0; index < amount; index += 1) {
       const angle = -Math.PI / 2;
       const depth = 0.78 + (index % 4) * 0.085;
       const travelDuration = reducedMotion
-        ? 3.3 + (index % 2) * 0.06
-        : 4.08 + (index % 3) * 0.045;
-      const exitFireworkAtAge = reducedMotion
-        ? 2.65 + index * 0.12
-        : 3.72 + index * 0.055;
+        ? 5.5
+        : width < 700
+          ? 6.5
+          : 6.3;
+      const holdDuration = reducedMotion ? 0.45 : 0.72;
+      const fadeDuration = reducedMotion ? 0.72 : 0.92;
+      const fadeStartAge = travelDuration + holdDuration;
       const portraitScale = height > width ? 0.86 : 0.62;
       const item = {
         x,
@@ -1735,8 +1790,10 @@
         vy: 0,
         age: 0,
         delay: index * delayStep,
-        life: exitFireworkAtAge + (reducedMotion ? 0.54 : 0.68) + Math.random() * 0.08,
+        life: fadeStartAge + fadeDuration,
         travelDuration,
+        fadeStartAge,
+        fadeDuration,
         startScale: 0.042 + (index % 3) * 0.006,
         endScale: portraitScale * (0.92 + depth * 0.25 + (index % 3) * 0.025),
         scale: 0.045,
@@ -1747,17 +1804,18 @@
         originNX: x / width,
         originNY: y / height,
         baseAngle: angle,
-        turns: 1.28 + (index % 2) * 0.025,
+        turns: 3,
         radiusFactor: 0.43 + depth * 0.05 + (index % 3) * 0.012,
         spiralProgress: 0,
         tangentX: 1,
         tangentY: 0,
-        entryFireworkAtAge: reducedMotion ? 0.26 : 0.3,
-        exitFireworkAtAge,
+        entryFireworkAtAge: reducedMotion ? 0.3 : 0.32,
         entryFireworkTriggered: false,
-        exitFireworkTriggered: false,
         entryFireworkAt: -Infinity,
-        exitFireworkAt: -Infinity,
+        celebrationLevel: 0,
+        lastBurstAt: -Infinity,
+        lastBurstIntensity: 0,
+        lastVolley: -1,
         facing: 1,
         tilt: -0.18,
         swimPhase: Math.random() * TAU,
@@ -1776,62 +1834,12 @@
     }
   }
 
-  function launchPodFireworkChain(now) {
-    if (!podCelebration.active || podCelebration.fireworksTriggered) return;
-    podCelebration.fireworksTriggered = true;
-
-    const amountScale = reducedMotion ? 0.26 : width < 700 ? 0.34 : 0.44;
-    const chainBudget = reducedMotion ? 100 : width < 700 ? 270 : 450;
-    reserveFireworkCapacity(chainBudget);
-
-    screenFlash = Math.max(screenFlash, reducedMotion ? 0.2 : 0.42);
-    cameraKick = Math.max(cameraKick, reducedMotion ? 0 : 0.3);
-    titleMagicAt = now;
+  function finishPodCelebration(now) {
+    if (!podCelebration.active || Number.isFinite(podCelebration.endingAt)) return;
+    podCelebration.endingAt = now;
     whale.finalReactionAt = now;
     whale.finalReactionKind = "pod";
-    const centerX = podCelebration.centerNX * width;
-    const centerY = podCelebration.centerNY * height;
-    [0, 150].forEach((delay, index) => {
-      celebrationWaves.push({
-        x: centerX,
-        y: centerY,
-        born: now + delay,
-        life: 1.35 + index * 0.24,
-        style: "pod",
-        color: POD_COLORS[index + 1],
-        index,
-      });
-    });
-    emitParticles(centerX, centerY, reducedMotion ? 22 : width < 700 ? 48 : 72, {
-      minSpeed: 65,
-      maxSpeed: 240,
-      minLife: 0.9,
-      maxLife: 2.5,
-      palette: POD_COLORS,
-    });
-
-    const finalDelay = reducedMotion ? 180 : 260;
-    [0.25, 0.5, 0.75].forEach((nx, index) => {
-      queueMagicBurst(now, finalDelay + index * 120, nx, index === 1 ? 0.1 : 0.15, "chrysanthemum", 1.02 + index * 0.05, {
-        amountScale,
-        priority: true,
-        chime: index === 1 ? 4 : -1,
-        podId: podCelebration.id,
-        grand: 0.9 + index * 0.08,
-        palette: POD_COLORS,
-      });
-    });
-    queueMagicBurst(now, finalDelay + 520, 0.5, 0.84, "halo", 1.12, {
-      amountScale: amountScale * 1.12,
-      priority: true,
-      chime: 4,
-      podId: podCelebration.id,
-      grand: 1.08,
-      palette: POD_COLORS,
-    });
-    podCelebration.chainEndsAt = now + finalDelay + 2400;
-    audio.whaleCall();
-    setPrompt("Đàn cá voi đang mở hội", "Mỗi chiếc đuôi để lại một chùm pháo hoa", 2600);
+    setPrompt("Đàn cá voi tan vào ánh sao", "Pháo hoa vẫn còn ngân sáng trong vũ trụ", 2200);
   }
 
   function queueMagicBurst(now, delay, nx, ny, style, depth = 1, options = {}) {
@@ -1987,6 +1995,7 @@
       if ((now - fireworkBlooms[index].born) / 1000 >= fireworkBlooms[index].life) fireworkBlooms.splice(index, 1);
     }
 
+    const introducedThisFrame = [];
     for (let index = zoomWhales.length - 1; index >= 0; index -= 1) {
       const item = zoomWhales[index];
       item.age += dt;
@@ -2000,21 +2009,26 @@
       const afterTravel = Math.max(0, localAge - item.travelDuration);
       const endPath = sampleZoomWhalePath(item, 1);
       const beforeEnd = sampleZoomWhalePath(item, 0.996);
-      const terminalFactor = 1 / (0.004 * item.travelDuration);
+      const terminalDX = endPath.x - beforeEnd.x;
+      const terminalDY = endPath.y - beforeEnd.y;
+      const terminalLength = Math.max(0.001, Math.hypot(terminalDX, terminalDY));
+      const terminalTangent = {
+        x: terminalDX / terminalLength,
+        y: terminalDY / terminalLength,
+      };
+      const coastDistance = Math.min(
+        Math.min(width, height) * 0.045,
+        afterTravel * Math.min(width, height) * 0.026,
+      );
       const path = progress < 1
         ? sampleZoomWhalePath(item, progress)
         : {
-            x: endPath.x + (endPath.x - beforeEnd.x) * terminalFactor * afterTravel,
-            y: endPath.y + (endPath.y - beforeEnd.y) * terminalFactor * afterTravel,
+            x: endPath.x + terminalTangent.x * coastDistance,
+            y: endPath.y + terminalTangent.y * coastDistance,
           };
       const tangent = progress < 1
         ? sampleZoomWhaleTangent(item, progress)
-        : (() => {
-            const dx = endPath.x - beforeEnd.x;
-            const dy = endPath.y - beforeEnd.y;
-            const length = Math.max(0.001, Math.hypot(dx, dy));
-            return { x: dx / length, y: dy / length };
-          })();
+        : terminalTangent;
       const previousTangentX = item.tangentX;
       const previousTangentY = item.tangentY;
       const safeDt = Math.max(0.001, dt);
@@ -2026,9 +2040,12 @@
       item.tangentY = tangent.y;
       item.spiralProgress = progress;
       const perspective = Math.pow(progress, 1.28);
-      item.scale = lerp(item.startScale, item.endScale, perspective) * (1 + Math.min(0.1, afterTravel * 0.055));
-      const fadeStart = item.exitFireworkAtAge - (reducedMotion ? 0.3 : 0.42);
-      const fade = 1 - easeInOutCubic(clamp((localAge - fadeStart) / (item.life - fadeStart), 0, 1));
+      item.scale = lerp(item.startScale, item.endScale, perspective) * (1 + Math.min(0.065, afterTravel * 0.035));
+      const fade = 1 - easeInOutCubic(clamp(
+        (localAge - item.fadeStartAge) / item.fadeDuration,
+        0,
+        1,
+      ));
       item.opacity = clamp(localAge / 0.24, 0, 1) * fade * (0.78 + item.depth * 0.17);
       if (tangent.x > 0.18) item.facing = 1;
       else if (tangent.x < -0.18) item.facing = -1;
@@ -2054,34 +2071,19 @@
         && item.opacity >= 0.62
       ) {
         item.entryFireworkTriggered = true;
-        triggerZoomWhaleFirework(item, now, "entry");
-      }
-      if (
-        !item.exitFireworkTriggered
-        && localAge >= item.exitFireworkAtAge
-        && item.opacity >= 0.35
-      ) {
-        item.exitFireworkTriggered = true;
-        if (podCelebration.active && item.podId === podCelebration.id) {
-          podCelebration.arrived = Math.min(podCelebration.total, podCelebration.arrived + 1);
-        }
-        triggerZoomWhaleFirework(item, now, "exit");
+        item.entryFireworkAt = now;
+        introducedThisFrame.push(item);
       }
     }
 
+    introducedThisFrame
+      .sort((first, second) => first.podIndex - second.podIndex)
+      .forEach((item) => triggerPodCrescendoVolley(item, now));
+
     if (podCelebration.active) {
-      const currentPod = zoomWhales.filter((item) => item.podId === podCelebration.id);
-      if (
-        !podCelebration.fireworksTriggered
-        && podCelebration.arrived >= podCelebration.total
-      ) {
-        launchPodFireworkChain(now);
-      }
-      if (
-        podCelebration.fireworksTriggered
-        && !currentPod.length
-        && now >= podCelebration.chainEndsAt
-      ) {
+      const hasCurrentPod = zoomWhales.some((item) => item.podId === podCelebration.id);
+      if (!hasCurrentPod) finishPodCelebration(now);
+      if (Number.isFinite(podCelebration.endingAt) && now - podCelebration.endingAt >= 2200) {
         podCelebration.active = false;
       }
     }
@@ -3226,6 +3228,20 @@
     const magicCenterX = titleMagicOrigin?.x ?? width / 2;
     const magicCenterY = titleMagicOrigin?.y ?? height * 0.405;
     ctx.save();
+    if (titleLayout.length) {
+      const firstLine = titleLayout[0];
+      const lastLine = titleLayout[titleLayout.length - 1];
+      const veilY = (firstLine.y + lastLine.y) / 2;
+      const veilRadius = Math.max(140, Math.min(width * 0.42, height * 0.34));
+      const veil = ctx.createRadialGradient(width / 2, veilY, 0, width / 2, veilY, veilRadius);
+      veil.addColorStop(0, "rgba(0, 5, 28, 0.23)");
+      veil.addColorStop(0.58, "rgba(2, 8, 35, 0.12)");
+      veil.addColorStop(1, "rgba(0, 0, 0, 0)");
+      ctx.fillStyle = veil;
+      ctx.beginPath();
+      ctx.ellipse(width / 2, veilY, veilRadius * 1.48, veilRadius, 0, 0, TAU);
+      ctx.fill();
+    }
     if (magicPulse > 0) {
       ctx.translate(magicCenterX, magicCenterY);
       ctx.scale(1 + magicPulse * 0.042, 1 + magicPulse * 0.055);
@@ -3261,22 +3277,22 @@
     if (titleGlow && age > 0.5) {
       ctx.save();
       ctx.globalCompositeOperation = "lighter";
-      ctx.globalAlpha = clamp((age - 0.5) * 0.2, 0, 0.28);
+      ctx.globalAlpha = clamp((age - 0.5) * 0.14, 0, 0.17);
       ctx.drawImage(titleGlow, 0, 0);
       ctx.restore();
     }
     if (titleCore && age > 0.92) {
       ctx.save();
       ctx.globalCompositeOperation = "source-over";
-      ctx.globalAlpha = easeOutCubic(clamp((age - 0.92) / 1.05, 0, 1)) * 0.985;
+      ctx.globalAlpha = easeOutCubic(clamp((age - 0.92) / 1.05, 0, 1)) * 0.48;
       ctx.drawImage(titleCore, 0, 0);
       ctx.restore();
     }
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
     if (age > 0.72) {
-      ctx.strokeStyle = `rgba(105, 225, 255, ${Math.min(0.28, (age - 0.72) * 0.13)})`;
-      ctx.lineWidth = 0.8;
+      ctx.strokeStyle = `rgba(105, 225, 255, ${Math.min(0.34, (age - 0.72) * 0.15)})`;
+      ctx.lineWidth = 0.7;
       for (let index = 0; index < titleParticles.length; index += 1) {
         const particle = titleParticles[index];
         if (particle.link < 0 || index % 2) continue;
@@ -3292,14 +3308,18 @@
     for (let index = 0; index < titleParticles.length; index += 1) {
       const particle = titleParticles[index];
       const visible = clamp((age - particle.delay) * 2.4, 0, 1);
-      ctx.globalAlpha = visible * (0.82 + Math.sin(particle.phase) * 0.1);
-      ctx.fillStyle = index % 19 === 0 ? "#a4f8ff" : index % 11 === 0 ? "#4d96ff" : index % 7 === 0 ? "#ffffff" : "#82efff";
-      const size = particle.size * (index % 19 === 0 ? 1.9 : 1);
+      const palette = particle.accent ? TITLE_ACCENT_COLORS : TITLE_PARTICLE_COLORS;
+      const colorIndex = Math.min(palette.length - 1, Math.floor(particle.tone * palette.length));
+      const twinkle = 0.8 + Math.sin(particle.phase) * (particle.accent ? 0.18 : 0.14);
+      ctx.globalAlpha = visible * twinkle;
+      ctx.fillStyle = palette[colorIndex];
+      const flarePoint = index % (particle.accent ? 13 : 19) === 0;
+      const size = particle.size * (flarePoint ? 1.85 : 1);
       ctx.beginPath();
       ctx.arc(particle.x, particle.y, size, 0, TAU);
       ctx.fill();
-      if (index % 41 === 0 && visible > 0.8) {
-        ctx.strokeStyle = "rgba(255,255,255,0.65)";
+      if (index % (particle.accent ? 29 : 41) === 0 && visible > 0.8) {
+        ctx.strokeStyle = particle.accent ? "rgba(214,250,255,0.86)" : "rgba(255,255,255,0.68)";
         ctx.lineWidth = 0.7;
         ctx.beginPath();
         ctx.moveTo(particle.x - size * 3.5, particle.y);
@@ -3316,15 +3336,15 @@
       ctx.save();
       ctx.globalCompositeOperation = "lighter";
       titleLayout.forEach((line, lineIndex) => {
-        const flareCount = lineIndex === 1 ? 7 : 5;
+        const flareCount = 5;
         for (let index = 0; index < flareCount; index += 1) {
           const progress = flareCount === 1 ? 0.5 : index / (flareCount - 1);
           const x = width / 2 - line.width * 0.46 + line.width * 0.92 * progress;
           const y = line.y + Math.sin(index * 2.7 + lineIndex + now * 0.0011) * line.size * 0.16;
           const pulse = (0.45 + Math.sin(now * 0.002 + index * 1.8 + lineIndex) * 0.25) * reveal;
-          const ray = (lineIndex === 1 ? 5.5 : 4.2) + pulse * 4;
+          const ray = (lineIndex === 1 ? 4.7 : 4.2) + pulse * 3.6;
           ctx.globalAlpha = Math.max(0.1, pulse);
-          ctx.strokeStyle = index % 3 === 0 ? "#f3ffff" : index % 2 ? "#55a4ff" : "#8ff5ff";
+          ctx.strokeStyle = index % 4 === 0 ? "#ffe0aa" : index % 3 === 0 ? "#c69cff" : index % 2 ? "#55a4ff" : "#8ff5ff";
           ctx.lineWidth = 0.7;
           ctx.beginPath();
           ctx.moveTo(x - ray, y);
@@ -3350,25 +3370,26 @@
       const isNear = bloom.depth >= 0.95;
       if (layer !== "all" && (layer === "near") !== isNear) continue;
       const progress = clamp((now - bloom.born) / (bloom.life * 1000), 0, 1);
-      const life = 1 - progress;
+      const life = Math.pow(1 - progress, bloom.fadePower || 1);
       const grand = bloom.grand || 0;
+      const intensity = bloom.intensity ?? 1;
       const bloomPalette = Array.isArray(bloom.palette) && bloom.palette.length
         ? bloom.palette
         : null;
       const radius = easeOutCubic(progress) * (
         (34 + bloom.depth * 42) * (1 + grand * 0.46)
         + Math.min(width, height) * grand * 0.035
-      );
+      ) * (bloom.radiusScale ?? 1);
       const glow = ctx.createRadialGradient(bloom.x, bloom.y, 0, bloom.x, bloom.y, Math.max(1, radius));
       glow.addColorStop(0, `rgba(255, 255, 255, ${life * 0.9})`);
       glow.addColorStop(0.16, bloom.color);
       glow.addColorStop(1, "rgba(0, 0, 0, 0)");
-      ctx.globalAlpha = (isNear ? 0.72 : 0.38) * life;
+      ctx.globalAlpha = (isNear ? 0.72 : 0.38) * life * intensity;
       ctx.fillStyle = glow;
       ctx.beginPath();
       ctx.arc(bloom.x, bloom.y, radius, 0, TAU);
       ctx.fill();
-      ctx.globalAlpha = life * (isNear ? 0.65 : 0.34);
+      ctx.globalAlpha = life * (isNear ? 0.65 : 0.34) * intensity;
       ctx.strokeStyle = bloom.color;
       ctx.lineWidth = 1 + bloom.depth * 1.4;
       ctx.beginPath();
@@ -3376,7 +3397,8 @@
       ctx.stroke();
 
       if (grand > 0.01) {
-        const rayCount = reducedMotion ? 10 : 18 + Math.round(grand * 5);
+        const baseRayCount = reducedMotion ? 10 : 18 + Math.round(grand * 5);
+        const rayCount = Math.max(4, Math.round(baseRayCount * (bloom.rayScale ?? 1)));
         ctx.lineCap = "round";
         for (let index = 0; index < rayCount; index += 1) {
           const angle = bloom.seed + (index / rayCount) * TAU + Math.sin(index * 2.37) * 0.035;
@@ -3385,7 +3407,7 @@
           const outerRadius = radius * variance;
           const endX = bloom.x + Math.cos(angle) * outerRadius;
           const endY = bloom.y + Math.sin(angle) * outerRadius;
-          ctx.globalAlpha = life * (isNear ? 0.82 : 0.56) * (0.68 + grand * 0.16);
+          ctx.globalAlpha = life * intensity * (isNear ? 0.82 : 0.56) * (0.68 + grand * 0.16);
           ctx.strokeStyle = bloomPalette
             ? bloomPalette[(index * 2 + 1) % bloomPalette.length]
             : index % 7 === 0
@@ -3408,7 +3430,7 @@
             ctx.fill();
           }
         }
-        ctx.globalAlpha = life * 0.42;
+        ctx.globalAlpha = life * intensity * 0.42;
         ctx.strokeStyle = bloomPalette
           ? bloomPalette[bloomPalette.length - 1]
           : grand > 1.2
@@ -3426,8 +3448,8 @@
     for (const particle of fireworks) {
       const isNear = particle.depth >= 0.95;
       if (layer !== "all" && (layer === "near") !== isNear) continue;
-      const life = 1 - particle.age / particle.life;
-      ctx.globalAlpha = life * (isNear ? 1 : 0.58);
+      const life = Math.pow(1 - particle.age / particle.life, particle.fadePower || 1);
+      ctx.globalAlpha = life * (particle.alpha ?? 1) * (isNear ? 1 : 0.58);
       ctx.strokeStyle = particle.color;
       ctx.fillStyle = particle.color;
       ctx.lineWidth = Math.max(0.45, particle.size * life * (isNear ? 0.9 : 0.58));
@@ -3553,8 +3575,8 @@
     if (!podCelebration.active) return;
     const age = Math.max(0, (now - podCelebration.startedAt) / 1000);
     const build = easeOutCubic(clamp(age / 1.35, 0, 1));
-    const chainFade = podCelebration.fireworksTriggered
-      ? clamp((podCelebration.chainEndsAt - now) / 1700, 0.18, 1)
+    const chainFade = Number.isFinite(podCelebration.endingAt)
+      ? clamp((podCelebration.endingAt + 2200 - now) / 2200, 0, 1)
       : 1;
     const centerX = podCelebration.centerNX * width;
     const centerY = podCelebration.centerNY * height;
@@ -3627,20 +3649,48 @@
     const ordered = [...zoomWhales].sort((first, second) => first.depth - second.depth);
     for (const item of ordered) {
       if (item.opacity <= 0.01) continue;
+      const scale = whaleScale() * item.scale;
+      const levelProgress = clamp(
+        item.celebrationLevel / Math.max(1, podCelebration.total - 1),
+        0,
+        1,
+      );
+      const burstAge = (now - item.lastBurstAt) / 1000;
+      const burstPulse = Number.isFinite(item.lastBurstAt) && burstAge >= 0 && burstAge < 2.8
+        ? Math.pow(1 - burstAge / 2.8, 0.72)
+        : 0;
+      if (levelProgress > 0 || burstPulse > 0) {
+        const auraRadius = Math.max(
+          18,
+          330 * scale * (0.22 + levelProgress * 0.09 + burstPulse * 0.06),
+        );
+        const aura = ctx.createRadialGradient(item.x, item.y, 0, item.x, item.y, auraRadius);
+        aura.addColorStop(0, `rgba(229, 253, 255, ${(0.12 + burstPulse * 0.18) * item.opacity})`);
+        aura.addColorStop(0.32, `rgba(75, 231, 255, ${(0.1 + levelProgress * 0.16) * item.opacity})`);
+        aura.addColorStop(0.72, `rgba(34, 105, 255, ${(0.05 + levelProgress * 0.09) * item.opacity})`);
+        aura.addColorStop(1, "rgba(0, 0, 0, 0)");
+        ctx.save();
+        ctx.globalCompositeOperation = "lighter";
+        ctx.fillStyle = aura;
+        ctx.beginPath();
+        ctx.ellipse(item.x, item.y, auraRadius, auraRadius * 0.62, item.tilt, 0, TAU);
+        ctx.fill();
+        ctx.restore();
+      }
       if (item.trail.length > 1) {
         const head = item.trail[0];
         const tail = item.trail[item.trail.length - 1];
         const gradient = ctx.createLinearGradient(tail.x, tail.y, head.x, head.y);
         gradient.addColorStop(0, "rgba(27, 91, 255, 0)");
-        gradient.addColorStop(0.58, `rgba(33, 145, 255, ${item.opacity * 0.24})`);
-        gradient.addColorStop(1, `rgba(105, 242, 255, ${item.opacity * 0.66})`);
+        gradient.addColorStop(0.58, `rgba(33, 145, 255, ${item.opacity * (0.24 + levelProgress * 0.06)})`);
+        gradient.addColorStop(1, `rgba(105, 242, 255, ${item.opacity * (0.66 + levelProgress * 0.12)})`);
         ctx.save();
         ctx.globalCompositeOperation = "lighter";
         ctx.strokeStyle = gradient;
         ctx.globalAlpha = item.opacity;
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
-        ctx.lineWidth = Math.max(0.65, item.depth * 1.35);
+        ctx.lineWidth = Math.max(0.65, item.depth * (1.35 + levelProgress * 0.28));
         ctx.beginPath();
         ctx.moveTo(head.x, head.y);
         for (let index = 1; index < item.trail.length; index += 1) {
@@ -3653,7 +3703,6 @@
         ctx.restore();
       }
 
-      const scale = whaleScale() * item.scale;
       if (!babyWhaleSprite.complete || !babyWhaleSprite.naturalWidth) {
         drawWhaleVector(item.x, item.y, scale * 0.72, item.facing, item.tilt, item.opacity, now, false);
         continue;
@@ -3953,7 +4002,8 @@
       if (Number.isFinite(titleMagicAt)) titleMagicAt += hiddenDuration;
       if (Number.isFinite(whale.finalReactionAt)) whale.finalReactionAt += hiddenDuration;
       if (Number.isFinite(podCelebration.startedAt)) podCelebration.startedAt += hiddenDuration;
-      if (Number.isFinite(podCelebration.chainEndsAt)) podCelebration.chainEndsAt += hiddenDuration;
+      if (Number.isFinite(podCelebration.allVisibleAt)) podCelebration.allVisibleAt += hiddenDuration;
+      if (Number.isFinite(podCelebration.endingAt)) podCelebration.endingAt += hiddenDuration;
       if (lastMagicAt) lastMagicAt += hiddenDuration;
       lastCometAt += hiddenDuration;
       hiddenAt = 0;
