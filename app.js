@@ -84,6 +84,26 @@
     startedAt: -Infinity,
     endingAt: -Infinity,
   };
+  const adultPodJourney = {
+    phase: "idle",
+    startedAt: -Infinity,
+    duration: 0,
+    startNX: 0.5,
+    startNY: 0.72,
+    centerNX: 0.5,
+    centerNY: 0.405,
+    homeNX: 0.6,
+    homeNY: 0.735,
+    returnStartNX: -0.2,
+    returnStartNY: 0.87,
+    controlANX: 0.1,
+    controlANY: 0.58,
+    controlBNX: 0.34,
+    controlBNY: 0.83,
+    homeFacing: 1,
+    homeTilt: 0,
+    homeBend: 0.9,
+  };
   const vortexDust = [];
   const warpStreaks = [];
   let titleCore = null;
@@ -689,6 +709,24 @@
     };
   }
 
+  function adultPodScaleMultiplier(now = performance.now()) {
+    if (adultPodJourney.phase === "idle") return 1;
+    if (adultPodJourney.phase === "settling") return 1;
+    const progress = clamp(
+      (now - adultPodJourney.startedAt) / Math.max(1, adultPodJourney.duration),
+      0,
+      1,
+    );
+    if (adultPodJourney.phase === "departing") {
+      const collapse = easeInOutCubic(clamp((progress - 0.28) / 0.72, 0, 1));
+      return lerp(1, 0.16, collapse);
+    }
+    if (adultPodJourney.phase === "returning") {
+      return lerp(0.68, 1, easeOutCubic(progress));
+    }
+    return 0.16;
+  }
+
   function whaleRenderScale(now = performance.now()) {
     const active = activeWhaleScale(now);
     if (phase === "transition") {
@@ -704,7 +742,8 @@
       const reaction = finaleWhaleReaction(now);
       const breathing = Math.sin(now * 0.00115) * (reducedMotion ? 0.004 : 0.011);
       const reactionScale = reaction.envelope * (reaction.kind === "pod" ? 0.026 : 0.016);
-      return (targetWidth / 420) * entrance * (1 + breathing + reactionScale);
+      return (targetWidth / 420) * entrance * (1 + breathing + reactionScale)
+        * adultPodScaleMultiplier(now);
     }
     return active;
   }
@@ -967,6 +1006,27 @@
     liveStatus.textContent = "Cả tinh vân đang co vào một điểm. Cá voi chuẩn bị lao xuyên cánh cổng.";
   }
 
+  function resetAdultPodJourney() {
+    adultPodJourney.phase = "idle";
+    adultPodJourney.startedAt = -Infinity;
+    adultPodJourney.duration = 0;
+    adultPodJourney.startNX = 0.5;
+    adultPodJourney.startNY = 0.72;
+    adultPodJourney.centerNX = 0.5;
+    adultPodJourney.centerNY = 0.405;
+    adultPodJourney.homeNX = 0.6;
+    adultPodJourney.homeNY = 0.735;
+    adultPodJourney.returnStartNX = -0.2;
+    adultPodJourney.returnStartNY = 0.87;
+    adultPodJourney.controlANX = 0.1;
+    adultPodJourney.controlANY = 0.58;
+    adultPodJourney.controlBNX = 0.34;
+    adultPodJourney.controlBNY = 0.83;
+    adultPodJourney.homeFacing = 1;
+    adultPodJourney.homeTilt = 0;
+    adultPodJourney.homeBend = 0.9;
+  }
+
   function triggerFinale() {
     phase = "finale";
     phaseStarted = performance.now();
@@ -991,6 +1051,7 @@
     podCelebration.allVisibleAt = -Infinity;
     podCelebration.startedAt = -Infinity;
     podCelebration.endingAt = -Infinity;
+    resetAdultPodJourney();
     interactiveFirework = 0;
     lastMagicAt = 0;
     titleMagicAt = -Infinity;
@@ -1202,10 +1263,271 @@
     }
   }
 
+  function beginAdultPodJourney(x, y, now) {
+    if (adultPodJourney.phase !== "idle") return false;
+    adultPodJourney.phase = "departing";
+    adultPodJourney.startedAt = now;
+    adultPodJourney.duration = reducedMotion ? 900 : 1720;
+    adultPodJourney.startNX = whale.x / Math.max(1, width);
+    adultPodJourney.startNY = whale.y / Math.max(1, height);
+    adultPodJourney.centerNX = clamp(x / Math.max(1, width), 0.06, 0.94);
+    adultPodJourney.centerNY = clamp(y / Math.max(1, height), 0.08, 0.9);
+    adultPodJourney.homeNX = adultPodJourney.startNX;
+    adultPodJourney.homeNY = adultPodJourney.startNY;
+    adultPodJourney.homeFacing = whale.facing;
+    adultPodJourney.homeTilt = whale.tilt;
+    adultPodJourney.homeBend = whale.bend;
+    whale.finalReactionAt = -Infinity;
+    whale.finalReactionKind = "pod";
+    whale.trail.length = 0;
+    whale.trailClock = 0;
+    setPrompt("Cá voi lớn đang mở lối", "Bơi về tâm DE để gọi đàn sao", 1800);
+    return true;
+  }
+
+  function beginAdultWhaleReturn(now) {
+    if (adultPodJourney.phase !== "pod") return false;
+    const portrait = height > width;
+    const targetWidth = portrait
+      ? width * 1.11
+      : Math.min(width * 0.68, height * 1.03);
+    const entranceScale = (targetWidth / 420) * 0.84;
+    const spriteHalfWidth = (whaleSprite.complete && whaleSprite.naturalWidth ? 210 : 100) * entranceScale;
+    const startX = -spriteHalfWidth * 0.82;
+    const startY = height * 0.87;
+
+    adultPodJourney.phase = "returning";
+    adultPodJourney.startedAt = now;
+    adultPodJourney.duration = reducedMotion ? 1400 : 2850;
+    adultPodJourney.returnStartNX = startX / Math.max(1, width);
+    adultPodJourney.returnStartNY = startY / Math.max(1, height);
+    adultPodJourney.controlANX = 0.1;
+    adultPodJourney.controlANY = portrait ? 0.69 : 0.58;
+    adultPodJourney.controlBNX = portrait ? 0.3 : 0.34;
+    adultPodJourney.controlBNY = portrait ? 0.86 : 0.83;
+    whale.x = startX;
+    whale.y = startY;
+    whale.targetX = startX;
+    whale.targetY = startY;
+    whale.aimX = startX;
+    whale.aimY = startY;
+    whale.vx = width * 0.22;
+    whale.vy = -height * 0.03;
+    whale.facing = 1;
+    whale.tilt = 0;
+    whale.reveal = 0;
+    whale.bend = 1.08;
+    whale.trail.length = 0;
+    whale.trailClock = 0;
+    screenFlash = Math.max(screenFlash, reducedMotion ? 0.025 : 0.065);
+    return true;
+  }
+
+  function cubicBezierValue(start, controlA, controlB, end, progress) {
+    const inverse = 1 - progress;
+    return inverse ** 3 * start
+      + 3 * inverse ** 2 * progress * controlA
+      + 3 * inverse * progress ** 2 * controlB
+      + progress ** 3 * end;
+  }
+
+  function cubicBezierSlope(start, controlA, controlB, end, progress) {
+    const inverse = 1 - progress;
+    return 3 * inverse ** 2 * (controlA - start)
+      + 6 * inverse * progress * (controlB - controlA)
+      + 3 * progress ** 2 * (end - controlB);
+  }
+
+  function updateAdultPodJourney(dt, now) {
+    if (adultPodJourney.phase === "idle") return null;
+    const safeDt = Math.max(0.001, dt);
+
+    if (adultPodJourney.phase === "departing") {
+      const rawProgress = clamp(
+        (now - adultPodJourney.startedAt) / adultPodJourney.duration,
+        0,
+        1,
+      );
+      const progress = easeInOutCubic(rawProgress);
+      const startX = adultPodJourney.startNX * width;
+      const startY = adultPodJourney.startNY * height;
+      const centerX = adultPodJourney.centerNX * width;
+      const centerY = adultPodJourney.centerNY * height;
+      const previousX = whale.x;
+      const previousY = whale.y;
+      const nextX = lerp(startX, centerX, progress);
+      const nextY = lerp(startY, centerY, progress);
+      const travelX = centerX - startX;
+      const travelY = centerY - startY;
+
+      whale.x = nextX;
+      whale.y = nextY;
+      whale.vx = (nextX - previousX) / safeDt;
+      whale.vy = (nextY - previousY) / safeDt;
+      whale.targetX = nextX;
+      whale.targetY = nextY;
+      whale.aimX = nextX;
+      whale.aimY = nextY;
+      whale.facing = travelX >= 0 ? 1 : -1;
+      whale.reveal = 1 - easeInOutCubic(clamp((rawProgress - 0.64) / 0.36, 0, 1));
+
+      const tilt = clamp(Math.atan2(travelY, Math.max(70, Math.abs(travelX))), -0.48, 0.48);
+      const motion = {
+        tilt,
+        bend: 0.92 + Math.sin(rawProgress * Math.PI) * (reducedMotion ? 0.24 : 0.72),
+        swimRate: reducedMotion ? 2.2 : 3.7 + Math.sin(rawProgress * Math.PI) * 1.15,
+      };
+
+      if (rawProgress >= 1) {
+        whale.x = centerX;
+        whale.y = centerY;
+        whale.vx = 0;
+        whale.vy = 0;
+        whale.targetX = centerX;
+        whale.targetY = centerY;
+        whale.aimX = centerX;
+        whale.aimY = centerY;
+        whale.reveal = 0;
+        whale.trail.length = 0;
+        whale.trailClock = 0;
+        adultPodJourney.phase = "pod";
+        adultPodJourney.startedAt = now;
+        adultPodJourney.duration = 0;
+        emitParticles(centerX, centerY, reducedMotion ? 8 : 26, {
+          minSpeed: 18,
+          maxSpeed: 88,
+          minLife: 0.48,
+          maxLife: 1.15,
+          palette: POD_COLORS,
+        });
+        addRipple(centerX, centerY, "#65efff", 0, 0.42);
+        spawnWhalePod(centerX, centerY, now);
+        setPrompt("Đàn cá voi con đang thức giấc", "Hai vòng xoắn ốc mở dần từ tâm DE", 2600);
+        motion.bend = 0.92;
+        motion.swimRate = 0;
+      }
+      return motion;
+    }
+
+    if (adultPodJourney.phase === "pod") {
+      const centerX = adultPodJourney.centerNX * width;
+      const centerY = adultPodJourney.centerNY * height;
+      whale.x = centerX;
+      whale.y = centerY;
+      whale.vx = 0;
+      whale.vy = 0;
+      whale.targetX = centerX;
+      whale.targetY = centerY;
+      whale.aimX = centerX;
+      whale.aimY = centerY;
+      whale.reveal = 0;
+      whale.trail.length = 0;
+      whale.trailClock = 0;
+      return { tilt: whale.tilt, bend: 0.92, swimRate: 0 };
+    }
+
+    if (adultPodJourney.phase === "settling") {
+      const homeX = adultPodJourney.homeNX * width;
+      const homeY = adultPodJourney.homeNY * height;
+      whale.x = homeX;
+      whale.y = homeY;
+      whale.vx = 0;
+      whale.vy = 0;
+      whale.targetX = homeX;
+      whale.targetY = homeY;
+      whale.aimX = homeX;
+      whale.aimY = homeY;
+      whale.facing = adultPodJourney.homeFacing;
+      whale.reveal = 1;
+      if (now - adultPodJourney.startedAt >= adultPodJourney.duration) {
+        adultPodJourney.phase = "idle";
+        adultPodJourney.startedAt = -Infinity;
+        adultPodJourney.duration = 0;
+      }
+      return {
+        tilt: adultPodJourney.homeTilt,
+        bend: adultPodJourney.homeBend,
+        swimRate: reducedMotion ? 0.72 : 0.96,
+      };
+    }
+
+    const rawProgress = clamp(
+      (now - adultPodJourney.startedAt) / adultPodJourney.duration,
+      0,
+      1,
+    );
+    const progress = easeOutCubic(rawProgress);
+    const startX = adultPodJourney.returnStartNX * width;
+    const startY = adultPodJourney.returnStartNY * height;
+    const homeX = adultPodJourney.homeNX * width;
+    const homeY = adultPodJourney.homeNY * height;
+    const controlAX = adultPodJourney.controlANX * width;
+    const controlAY = adultPodJourney.controlANY * height;
+    const controlBX = adultPodJourney.controlBNX * width;
+    const controlBY = adultPodJourney.controlBNY * height;
+    const previousX = whale.x;
+    const previousY = whale.y;
+    const nextX = cubicBezierValue(startX, controlAX, controlBX, homeX, progress);
+    const nextY = cubicBezierValue(startY, controlAY, controlBY, homeY, progress);
+    const tangentX = cubicBezierSlope(startX, controlAX, controlBX, homeX, progress);
+    const tangentY = cubicBezierSlope(startY, controlAY, controlBY, homeY, progress);
+
+    whale.x = nextX;
+    whale.y = nextY;
+    whale.vx = (nextX - previousX) / safeDt;
+    whale.vy = (nextY - previousY) / safeDt;
+    whale.targetX = nextX;
+    whale.targetY = nextY;
+    whale.aimX = nextX;
+    whale.aimY = nextY;
+    whale.facing = 1;
+    whale.reveal = easeOutCubic(clamp((rawProgress - 0.025) / 0.3, 0, 1));
+
+    const settle = easeInOutCubic(clamp((rawProgress - 0.76) / 0.24, 0, 1));
+    const pathTilt = clamp(Math.atan2(tangentY, Math.max(80, Math.abs(tangentX))) * 0.72, -0.3, 0.2);
+    const swimBend = 0.98 + Math.sin(rawProgress * Math.PI) * (reducedMotion ? 0.18 : 0.52);
+    const motion = {
+      tilt: lerp(pathTilt, adultPodJourney.homeTilt, settle),
+      bend: lerp(swimBend, adultPodJourney.homeBend, settle),
+      swimRate: reducedMotion ? 1.8 : 2.85 + Math.sin(rawProgress * Math.PI) * 0.75,
+    };
+
+    if (rawProgress >= 1) {
+      adultPodJourney.phase = "settling";
+      adultPodJourney.startedAt = now;
+      adultPodJourney.duration = reducedMotion ? 220 : 520;
+      whale.x = homeX;
+      whale.y = homeY;
+      whale.vx = 0;
+      whale.vy = 0;
+      whale.targetX = homeX;
+      whale.targetY = homeY;
+      whale.aimX = homeX;
+      whale.aimY = homeY;
+      whale.facing = adultPodJourney.homeFacing;
+      whale.tilt = adultPodJourney.homeTilt;
+      whale.reveal = 1;
+      whale.bend = adultPodJourney.homeBend;
+      whale.finalReactionAt = now;
+      whale.finalReactionKind = "pod";
+      motion.tilt = adultPodJourney.homeTilt;
+      motion.bend = adultPodJourney.homeBend;
+      motion.swimRate = reducedMotion ? 0.9 : 1.24;
+      setPrompt("Cá voi lớn đã trở về", "Đúng vị trí bảo vệ Pastel de Whale", 2400);
+    }
+    return motion;
+  }
+
   function updateWhale(dt, now) {
     let scriptedFinale = false;
     let scriptedTilt = whale.tilt;
-    if (phase === "hunt" && currentWish?.selected) {
+    const podJourneyMotion = phase === "finale" || phase === "epilogue"
+      ? updateAdultPodJourney(dt, now)
+      : null;
+    if (podJourneyMotion) {
+      scriptedFinale = true;
+      scriptedTilt = podJourneyMotion.tilt;
+    } else if (phase === "hunt" && currentWish?.selected) {
       whale.targetX = currentWish.x - currentWish.approachFacing * whaleHeadReach();
       whale.targetY = currentWish.y;
     } else if (phase === "portal") {
@@ -1332,7 +1654,10 @@
       const nextFacing = currentWish.approachFacing;
       if (nextFacing !== whale.facing) whale.trail.length = 0;
       whale.facing = nextFacing;
-    } else if (phase === "finale" || phase === "epilogue" || (phase === "transition" && now - phaseStarted > 420)) {
+    } else if (
+      ((phase === "finale" || phase === "epilogue") && adultPodJourney.phase === "idle")
+      || (phase === "transition" && now - phaseStarted > 420)
+    ) {
       whale.facing = 1;
     } else if (Math.abs(whale.vx) > 42) {
       const nextFacing = whale.vx >= 0 ? 1 : -1;
@@ -1357,11 +1682,15 @@
     const finaleFlex = phase === "finale" || phase === "epilogue"
       ? 0.24 + Math.sin(now * 0.00145) * 0.065 + reaction.envelope * (reaction.kind === "tail" ? 0.56 : reaction.kind === "spiral" ? 0.34 : 0.26)
       : 0;
-    const bendTarget = 0.7 + finaleFlex + clamp(speed / 250, 0, 1) * 0.5 + clamp(Math.abs(desiredTilt - whale.tilt) * 1.4, 0, 0.35);
+    const bendTarget = podJourneyMotion
+      ? podJourneyMotion.bend
+      : 0.7 + finaleFlex + clamp(speed / 250, 0, 1) * 0.5 + clamp(Math.abs(desiredTilt - whale.tilt) * 1.4, 0, 0.35);
     whale.bend = lerp(whale.bend, bendTarget, 1 - Math.exp(-2.8 * dt));
-    const swimRate = phase === "finale" || phase === "epilogue"
-      ? 1.24 + clamp(speed / 180, 0, 0.62) + reaction.envelope * (reaction.kind === "tail" ? 0.92 : 0.48)
-      : 0.9 + clamp(speed / 150, 0, 1.25);
+    const swimRate = podJourneyMotion
+      ? podJourneyMotion.swimRate
+      : phase === "finale" || phase === "epilogue"
+        ? 1.24 + clamp(speed / 180, 0, 0.62) + reaction.envelope * (reaction.kind === "tail" ? 0.92 : 0.48)
+        : 0.9 + clamp(speed / 150, 0, 1.25);
     whale.swimPhase += dt * swimRate;
 
     for (let index = whale.trail.length - 1; index >= 0; index -= 1) {
@@ -1785,7 +2114,7 @@
     }
   }
 
-  function spawnWhalePod(x, y) {
+  function spawnWhalePod(x, y, now = performance.now()) {
     zoomWhales.length = 0;
     for (let index = magicQueue.length - 1; index >= 0; index -= 1) {
       if (magicQueue[index].podId) magicQueue.splice(index, 1);
@@ -1796,7 +2125,7 @@
     podCelebration.centerNY = y / height;
     podCelebration.visibleCount = 0;
     podCelebration.allVisibleAt = -Infinity;
-    podCelebration.startedAt = performance.now();
+    podCelebration.startedAt = now;
     podCelebration.endingAt = -Infinity;
 
     const amount = reducedMotion ? 5 : width < 700 ? 8 : 10;
@@ -1868,9 +2197,11 @@
   function finishPodCelebration(now) {
     if (!podCelebration.active || Number.isFinite(podCelebration.endingAt)) return;
     podCelebration.endingAt = now;
-    whale.finalReactionAt = now;
-    whale.finalReactionKind = "pod";
-    setPrompt("Đàn cá voi tan vào ánh sao", "Pháo hoa vẫn còn ngân sáng trong vũ trụ", 2200);
+    if (!beginAdultWhaleReturn(now)) {
+      whale.finalReactionAt = now;
+      whale.finalReactionKind = "pod";
+    }
+    setPrompt("Đàn cá voi tan vào ánh sao", "Cá voi lớn đang bơi trở về từ bên trái", 2600);
   }
 
   function queueMagicBurst(now, delay, nx, ny, style, depth = 1, options = {}) {
@@ -1938,9 +2269,14 @@
     reserveFireworkCapacity(reserved);
     titleMagicAt = now;
     titleMagicStyle = style;
-    whale.finalReactionAt = now;
-    whale.finalReactionKind = style;
     const isPodMagic = style === "pod";
+    if (isPodMagic) {
+      whale.finalReactionAt = -Infinity;
+      whale.finalReactionKind = "pod";
+    } else {
+      whale.finalReactionAt = now;
+      whale.finalReactionKind = style;
+    }
     const force = isPodMagic ? 0.3 : style === "spiral" ? 0.82 : 0.68;
     screenFlash = Math.max(
       screenFlash,
@@ -1979,7 +2315,7 @@
       queueMagicBurst(now, 230, nx - 0.2, ny + 0.03, "spiral", 0.82);
       queueMagicBurst(now, 360, nx + 0.2, ny - 0.04, "spiral", 0.9);
     } else {
-      spawnWhalePod(magicX, magicY);
+      beginAdultPodJourney(magicX, magicY, now);
     }
 
     const magicParticleCount = style === "pod"
@@ -2963,11 +3299,13 @@
 
   function drawWhaleBreath(now) {
     if (phase !== "finale" && phase !== "epilogue") return;
+    if (whale.reveal <= 0.02) return;
     const reaction = finaleWhaleReaction(now);
     const cycle = (now % 5800) / 5800;
     const natural = cycle < 0.32 ? Math.sin((cycle / 0.32) * Math.PI) : 0;
     const reactionBreath = reaction.active && reaction.kind === "pod" ? reaction.envelope : 0;
-    const strength = Math.max(natural * (reducedMotion ? 0.34 : 0.72), reactionBreath);
+    const strength = Math.max(natural * (reducedMotion ? 0.34 : 0.72), reactionBreath)
+      * clamp(whale.reveal, 0, 1);
     if (strength <= 0.025) return;
 
     const scale = whaleRenderScale(now);
@@ -3035,7 +3373,8 @@
   }
 
   function drawWhaleTrail(now) {
-    if (whale.trail.length < 2) return;
+    const reveal = clamp(whale.reveal, 0, 1);
+    if (whale.trail.length < 2 || reveal <= 0.015) return;
     const first = whale.trail[0];
     const last = whale.trail[whale.trail.length - 1];
     const gradient = ctx.createLinearGradient(first.x, first.y, last.x, last.y);
@@ -3061,18 +3400,18 @@
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.strokeStyle = gradient;
-    ctx.globalAlpha = 0.2;
+    ctx.globalAlpha = 0.2 * reveal;
     ctx.lineWidth = Math.max(1.2, 2.35 * scale);
     tracePath();
     ctx.stroke();
-    ctx.globalAlpha = 0.78;
+    ctx.globalAlpha = 0.78 * reveal;
     ctx.lineWidth = Math.max(0.48, 0.78 * scale);
     tracePath();
     ctx.stroke();
     whale.trail.forEach((point, index) => {
       if (!point.sparkle || index % 3) return;
       const life = 1 - point.age / point.life;
-      ctx.globalAlpha = Math.max(0, life * 0.52);
+      ctx.globalAlpha = Math.max(0, life * 0.52 * reveal);
       ctx.fillStyle = index % 2 ? "#65efff" : "#a778ff";
       ctx.beginPath();
       ctx.arc(point.x, point.y, 0.45 + life * 0.65, 0, TAU);
@@ -3932,6 +4271,7 @@
     }
 
     if ((phase === "finale" || phase === "epilogue") && epilogueStarted) {
+      if (adultPodJourney.phase !== "idle") return;
       const insideTitle = titleBounds && x >= titleBounds.left && x <= titleBounds.right && y >= titleBounds.top && y <= titleBounds.bottom;
       if (!insideTitle) {
         addRipple(x, y, COLORS[interactiveFirework % COLORS.length], 0, 0.42);
@@ -3945,8 +4285,12 @@
       triggerPastieMagic(style, x, y, now);
       audio.chime(interactiveFirework % 5);
       setPrompt(
-        style === "tail" ? "Một chiếc đuôi cá voi" : style === "spiral" ? "Một vòng xoắn ngân hà" : "Cả đàn cá voi đến chúc mừng",
-        "Chạm vào DE lần nữa",
+        style === "tail"
+          ? "Một chiếc đuôi cá voi"
+          : style === "spiral"
+            ? "Một vòng xoắn ngân hà"
+            : "Cá voi lớn đang mở lối",
+        style === "pod" ? "Chờ đàn cá voi thức giấc từ tâm DE" : "Chạm vào DE lần nữa",
         2200,
       );
     }
@@ -4046,6 +4390,7 @@
       if (Number.isFinite(podCelebration.startedAt)) podCelebration.startedAt += hiddenDuration;
       if (Number.isFinite(podCelebration.allVisibleAt)) podCelebration.allVisibleAt += hiddenDuration;
       if (Number.isFinite(podCelebration.endingAt)) podCelebration.endingAt += hiddenDuration;
+      if (Number.isFinite(adultPodJourney.startedAt)) adultPodJourney.startedAt += hiddenDuration;
       if (lastMagicAt) lastMagicAt += hiddenDuration;
       lastCometAt += hiddenDuration;
       hiddenAt = 0;
