@@ -20,7 +20,15 @@
   const TAU = Math.PI * 2;
   const COLORS = ["#54efff", "#168cff", "#9a62ff", "#ff78bd", "#ffd78c"];
   const POD_COLORS = ["#f2fdff", "#a4f8ff", "#58e8ff", "#1f9cff", "#2857ff"];
-  const POD_FIREWORK_COLORS = ["#ffffff", "#c9fcff", "#53f3ff", "#19baff", "#4f86ff"];
+  const POD_FIREWORK_COLORS = [
+    "#62f6ff",
+    "#20c7ff",
+    "#5078ff",
+    "#9b5cff",
+    "#f052c2",
+    "#ff776f",
+    "#ffd166",
+  ];
   const TITLE_PARTICLE_COLORS = ["#ffffff", "#bdfbff", "#67eaff", "#6d9cff", "#c89cff", "#ffd69a"];
   const TITLE_ACCENT_COLORS = ["#ffffff", "#d9fdff", "#7ff4ff", "#4fafff", "#a994ff", "#ffe0a8"];
   const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -83,6 +91,8 @@
     allVisibleAt: -Infinity,
     startedAt: -Infinity,
     endingAt: -Infinity,
+    travelVolleyClock: 0,
+    travelVolleyIndex: 0,
   };
   const adultPodJourney = {
     phase: "idle",
@@ -1051,6 +1061,8 @@
     podCelebration.allVisibleAt = -Infinity;
     podCelebration.startedAt = -Infinity;
     podCelebration.endingAt = -Infinity;
+    podCelebration.travelVolleyClock = 0;
+    podCelebration.travelVolleyIndex = 0;
     resetAdultPodJourney();
     interactiveFirework = 0;
     lastMagicAt = 0;
@@ -1872,6 +1884,10 @@
     const rayScale = clamp(effects.rayScale ?? 1, 0.25, 1.4);
     const bloomFadePower = clamp(effects.bloomFadePower ?? effects.fadePower ?? 1, 0.55, 1.5);
     const particleFadePower = clamp(effects.particleFadePower ?? effects.fadePower ?? 1, 0.55, 1.5);
+    const coreAlpha = clamp(effects.coreAlpha ?? 0.9, 0.12, 0.9);
+    const glowComposite = effects.glowComposite === "screen" ? "screen" : "lighter";
+    const particleComposite = effects.particleComposite === "screen" ? "screen" : "lighter";
+    const brightnessGroup = typeof effects.brightnessGroup === "string" ? effects.brightnessGroup : "";
     const born = Number.isFinite(effects.born) ? effects.born : performance.now();
     if (!count && !effects.forceBloom) return;
     const hasCustomPalette = Array.isArray(paletteOverride) && paletteOverride.length > 0;
@@ -1896,6 +1912,9 @@
       radiusScale,
       rayScale,
       fadePower: bloomFadePower,
+      coreAlpha,
+      glowComposite,
+      brightnessGroup,
       seed: Math.random() * TAU,
     });
     const addParticle = (vx, vy, color, size, life, gravity = 14) => {
@@ -1910,6 +1929,7 @@
         size: size * depth * particleScale,
         alpha: intensity,
         fadePower: particleFadePower,
+        composite: particleComposite,
         depth,
         gravity: gravity * (effects.gravityScale ?? 1),
         trailLimit: depth < 0.9 ? 3 : depth > 1.08 ? 6 : 4,
@@ -2028,7 +2048,7 @@
       amountScale,
       grand: 0.04 + stageProgress * 1.4,
       depth: 1.01 + stageProgress * 0.08,
-      intensity: 0.24 + stageProgress * 0.96,
+      intensity: 0.24 + stageProgress * 0.72,
       radiusScale: 0.42 + stageProgress * 0.98,
       bloomLifeScale: 0.72 + stageProgress * 1.16,
       particleLifeScale: 1 + stageProgress * 0.84,
@@ -2037,6 +2057,10 @@
       rayScale: 0.34 + stageProgress * 0.96,
       bloomFadePower: 1.12 - stageProgress * 0.5,
       particleFadePower: 0.92 - stageProgress * 0.3,
+      coreAlpha: 0.5,
+      glowComposite: "screen",
+      particleComposite: "screen",
+      brightnessGroup: "pod",
     };
   }
 
@@ -2062,6 +2086,10 @@
         rayScale: fireworkProfile.rayScale,
         bloomFadePower: fireworkProfile.bloomFadePower,
         particleFadePower: fireworkProfile.particleFadePower,
+        coreAlpha: fireworkProfile.coreAlpha,
+        glowComposite: fireworkProfile.glowComposite,
+        particleComposite: fireworkProfile.particleComposite,
+        brightnessGroup: fireworkProfile.brightnessGroup,
         forceBloom: true,
         born: now,
       },
@@ -2114,6 +2142,108 @@
     }
   }
 
+  function podTravelCrescendoProfile(item, volleyIndex) {
+    const maximumLevel = Math.max(1, podCelebration.total - 1);
+    const distanceLevel = Math.round(item.spiralProgress * maximumLevel);
+    const level = Math.max(item.celebrationLevel, distanceLevel);
+    const base = podCrescendoProfile(level);
+    const amountFactor = reducedMotion ? 0.34 : width < 700 ? 0.32 : 0.36;
+    const style = (volleyIndex + item.podIndex) % 3 === 1 ? "halo" : "chrysanthemum";
+
+    return {
+      level,
+      profile: {
+        ...base,
+        style,
+        amountScale: base.amountScale * amountFactor,
+        grand: 0.04 + base.grand * 0.78,
+        intensity: clamp(base.intensity * 0.86, 0.2, 0.82),
+        radiusScale: clamp(base.radiusScale * 0.86, 0.35, 1.25),
+        bloomLifeScale: clamp(base.bloomLifeScale * 0.7, 0.6, 1.35),
+        particleLifeScale: clamp(base.particleLifeScale * 0.76, 0.6, 1.45),
+        velocityScale: clamp(base.velocityScale * 0.9, 0.45, 1.15),
+        particleScale: clamp(base.particleScale * 0.9, 0.55, 1.2),
+        rayScale: clamp(base.rayScale * 0.82, 0.25, 1.12),
+        bloomFadePower: Math.max(0.76, base.bloomFadePower),
+        particleFadePower: Math.max(0.72, base.particleFadePower),
+        coreAlpha: 0.38,
+      },
+    };
+  }
+
+  function podBloomCap() {
+    return reducedMotion ? 28 : width < 700 ? 64 : 88;
+  }
+
+  function triggerPodFinalTravelBurst(item, now) {
+    const activePodBlooms = fireworkBlooms.filter((bloom) => bloom.brightnessGroup === "pod").length;
+    if (activePodBlooms >= podBloomCap()) {
+      let fadedBloomIndex = -1;
+      let fadedBloomProgress = -Infinity;
+      fireworkBlooms.forEach((bloom, index) => {
+        if (bloom.brightnessGroup !== "pod") return;
+        const progress = (now - bloom.born) / Math.max(1, bloom.life * 1000);
+        if (progress > fadedBloomProgress) {
+          fadedBloomProgress = progress;
+          fadedBloomIndex = index;
+        }
+      });
+      if (fadedBloomIndex >= 0) fireworkBlooms.splice(fadedBloomIndex, 1);
+      else return false;
+    }
+    const burst = podTravelCrescendoProfile(
+      item,
+      podCelebration.travelVolleyIndex + item.podIndex,
+    );
+    burst.profile.style = "chrysanthemum";
+    burst.profile.amountScale *= 0.82;
+    burst.profile.grand = Math.min(1.32, burst.profile.grand * 1.08 + 0.08);
+    burst.profile.intensity = Math.min(0.84, burst.profile.intensity * 1.04);
+    burst.profile.coreAlpha = 0.34;
+    triggerPodCrescendoFirework(
+      item,
+      burst.level,
+      podCelebration.total + podCelebration.travelVolleyIndex + item.podIndex,
+      now,
+      burst.profile,
+    );
+    return true;
+  }
+
+  function triggerPodTravelVolley(now) {
+    const candidates = zoomWhales
+      .filter((item) => (
+        item.podId === podCelebration.id
+        && item.entryFireworkTriggered
+        && item.opacity > 0.12
+        && item.spiralProgress < 0.94
+      ))
+      .sort((first, second) => first.podIndex - second.podIndex);
+    if (!candidates.length) return false;
+
+    const activePodBlooms = fireworkBlooms.filter((bloom) => bloom.brightnessGroup === "pod").length;
+    const availableBlooms = Math.max(0, podBloomCap() - activePodBlooms);
+    if (!availableBlooms) return false;
+
+    const offset = podCelebration.travelVolleyIndex % candidates.length;
+    const ordered = candidates.slice(offset).concat(candidates.slice(0, offset));
+    const volley = ordered.slice(0, availableBlooms).map((item) => {
+      const burst = podTravelCrescendoProfile(item, podCelebration.travelVolleyIndex);
+      return { item, ...burst };
+    });
+    volley.forEach(({ item, level, profile }) => {
+      triggerPodCrescendoFirework(
+        item,
+        level,
+        podCelebration.total + podCelebration.travelVolleyIndex,
+        now,
+        profile,
+      );
+    });
+    podCelebration.travelVolleyIndex += 1;
+    return true;
+  }
+
   function spawnWhalePod(x, y, now = performance.now()) {
     zoomWhales.length = 0;
     for (let index = magicQueue.length - 1; index >= 0; index -= 1) {
@@ -2127,6 +2257,8 @@
     podCelebration.allVisibleAt = -Infinity;
     podCelebration.startedAt = now;
     podCelebration.endingAt = -Infinity;
+    podCelebration.travelVolleyClock = 0;
+    podCelebration.travelVolleyIndex = 0;
 
     const amount = reducedMotion ? 5 : width < 700 ? 8 : 10;
     const delayStep = reducedMotion ? 0.34 : width < 700 ? 0.3 : 0.28;
@@ -2172,6 +2304,7 @@
         entryFireworkAtAge: reducedMotion ? 0.12 : 0.14,
         entryFireworkTriggered: false,
         entryFireworkAt: -Infinity,
+        finalTravelBurstTriggered: false,
         celebrationLevel: 0,
         lastBurstAt: -Infinity,
         lastBurstIntensity: 0,
@@ -2371,6 +2504,7 @@
     }
 
     const introducedThisFrame = [];
+    const finalTravelBursts = [];
     for (let index = zoomWhales.length - 1; index >= 0; index -= 1) {
       const item = zoomWhales[index];
       item.age += dt;
@@ -2449,11 +2583,46 @@
         item.entryFireworkAt = now;
         introducedThisFrame.push(item);
       }
+      if (
+        item.entryFireworkTriggered
+        && !item.finalTravelBurstTriggered
+        && progress >= 0.945
+        && progress < 1
+        && localAge < item.fadeStartAge
+        && item.opacity > 0.12
+      ) {
+        finalTravelBursts.push(item);
+      }
     }
 
     introducedThisFrame
       .sort((first, second) => first.podIndex - second.podIndex)
       .forEach((item) => triggerPodCrescendoVolley(item, now));
+
+    finalTravelBursts
+      .sort((first, second) => first.podIndex - second.podIndex)
+      .forEach((item) => {
+        if (triggerPodFinalTravelBurst(item, now)) {
+          item.finalTravelBurstTriggered = true;
+        }
+      });
+
+    if (
+      podCelebration.active
+      && adultPodJourney.phase === "pod"
+      && Number.isFinite(podCelebration.allVisibleAt)
+      && !Number.isFinite(podCelebration.endingAt)
+    ) {
+      const cadence = reducedMotion ? 1.35 : width < 700 ? 1.02 : 0.9;
+      podCelebration.travelVolleyClock += dt;
+      if (podCelebration.travelVolleyClock >= cadence) {
+        podCelebration.travelVolleyClock = Math.min(
+          cadence,
+          podCelebration.travelVolleyClock - cadence,
+        );
+        triggerPodTravelVolley(now);
+      }
+    }
 
     if (podCelebration.active) {
       const hasCurrentPod = zoomWhales.some((item) => item.podId === podCelebration.id);
@@ -3745,6 +3914,13 @@
   function drawFireworks(now, layer = "all") {
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
+    const activePodBloomCount = fireworkBlooms.reduce(
+      (count, bloom) => count + (bloom.brightnessGroup === "pod" ? 1 : 0),
+      0,
+    );
+    const podWhiteScale = activePodBloomCount > 0
+      ? clamp(Math.sqrt(6 / Math.max(6, activePodBloomCount)), 0.3, 1)
+      : 1;
     for (const bloom of fireworkBlooms) {
       const isNear = bloom.depth >= 0.95;
       if (layer !== "all" && (layer === "near") !== isNear) continue;
@@ -3759,15 +3935,20 @@
         (34 + bloom.depth * 42) * (1 + grand * 0.46)
         + Math.min(width, height) * grand * 0.035
       ) * (bloom.radiusScale ?? 1);
+      const whiteScale = bloom.brightnessGroup === "pod" ? podWhiteScale : 1;
+      const coreAlpha = (bloom.coreAlpha ?? 0.9) * whiteScale;
+      const coreRGB = bloom.brightnessGroup === "pod" ? "245, 253, 255" : "255, 255, 255";
       const glow = ctx.createRadialGradient(bloom.x, bloom.y, 0, bloom.x, bloom.y, Math.max(1, radius));
-      glow.addColorStop(0, `rgba(255, 255, 255, ${life * 0.9})`);
+      glow.addColorStop(0, `rgba(${coreRGB}, ${life * coreAlpha})`);
       glow.addColorStop(0.16, bloom.color);
       glow.addColorStop(1, "rgba(0, 0, 0, 0)");
       ctx.globalAlpha = (isNear ? 0.72 : 0.38) * life * intensity;
       ctx.fillStyle = glow;
+      ctx.globalCompositeOperation = bloom.glowComposite || "lighter";
       ctx.beginPath();
       ctx.arc(bloom.x, bloom.y, radius, 0, TAU);
       ctx.fill();
+      ctx.globalCompositeOperation = "lighter";
       ctx.globalAlpha = life * (isNear ? 0.65 : 0.34) * intensity;
       ctx.strokeStyle = bloom.color;
       ctx.lineWidth = 1 + bloom.depth * 1.4;
@@ -3803,7 +3984,11 @@
           ctx.lineTo(endX, endY);
           ctx.stroke();
           if (index % 3 === 0) {
-            ctx.fillStyle = index % 2 ? "#ffffff" : "#8ff5ff";
+            ctx.fillStyle = bloomPalette
+              ? bloomPalette[(index * 3 + 2) % bloomPalette.length]
+              : index % 2
+                ? "#ffffff"
+                : "#8ff5ff";
             ctx.beginPath();
             ctx.arc(endX, endY, 0.75 + grand * 0.42, 0, TAU);
             ctx.fill();
@@ -3824,10 +4009,16 @@
         ctx.stroke();
       }
     }
+    let activeParticleComposite = "lighter";
     for (const particle of fireworks) {
       const isNear = particle.depth >= 0.95;
       if (layer !== "all" && (layer === "near") !== isNear) continue;
       const life = Math.pow(1 - particle.age / particle.life, particle.fadePower || 1);
+      const particleComposite = particle.composite || "lighter";
+      if (particleComposite !== activeParticleComposite) {
+        ctx.globalCompositeOperation = particleComposite;
+        activeParticleComposite = particleComposite;
+      }
       ctx.globalAlpha = clamp(life * (particle.alpha ?? 1) * (isNear ? 1 : 0.58), 0, 1);
       ctx.strokeStyle = particle.color;
       ctx.fillStyle = particle.color;
@@ -3842,6 +4033,7 @@
       ctx.arc(particle.x, particle.y, particle.size * (0.45 + life), 0, TAU);
       ctx.fill();
     }
+    ctx.globalCompositeOperation = "lighter";
     if (layer === "far") {
       ctx.restore();
       return;
