@@ -1095,7 +1095,7 @@
     [0, 100, 220, 380].forEach((delay, index) => {
       addRipple(portal.x, portal.y, COLORS[(index + 1) % COLORS.length], delay, 1.2 + index * 0.2);
     });
-    liveStatus.textContent = "Cánh cổng mở. Cả ngân hà đang kết thành ba dòng chữ Pastel de Whale.";
+    liveStatus.textContent = "Cánh cổng mở. Cả ngân hà đang kết thành ba dòng chữ Chúc mừng Pastel comback.";
   }
 
   function measureTrackedText(context, text, tracking) {
@@ -1123,14 +1123,14 @@
     const portrait = height > width * 1.05;
     const lines = portrait
       ? [
-          { text: "PASTEL", size: Math.min(width * 0.16, height * 0.078, 108), y: height * 0.282, tracking: 0.06 },
-          { text: "DE", size: Math.min(width * 0.185, height * 0.083, 112), y: height * 0.405, tracking: 0.105 },
-          { text: "WHALE", size: Math.min(width * 0.175, height * 0.09, 138), y: height * 0.53, tracking: 0.07 },
+          { text: "CHÚC MỪNG", size: Math.min(width * 0.105, height * 0.064, 86), y: height * 0.275, tracking: 0.035 },
+          { text: "PASTEL", size: Math.min(width * 0.155, height * 0.083, 112), y: height * 0.405, tracking: 0.06 },
+          { text: "COMBACK", size: Math.min(width * 0.13, height * 0.09, 126), y: height * 0.535, tracking: 0.055 },
         ]
       : [
-          { text: "PASTEL", size: Math.min(width * 0.085, height * 0.095, 100), y: height * 0.265, tracking: 0.06 },
-          { text: "DE", size: Math.min(width * 0.085, height * 0.105, 104), y: height * 0.395, tracking: 0.105 },
-          { text: "WHALE", size: Math.min(width * 0.11, height * 0.135, 145), y: height * 0.535, tracking: 0.075 },
+          { text: "CHÚC MỪNG", size: Math.min(width * 0.06, height * 0.075, 90), y: height * 0.265, tracking: 0.035 },
+          { text: "PASTEL", size: Math.min(width * 0.085, height * 0.105, 110), y: height * 0.395, tracking: 0.06 },
+          { text: "COMBACK", size: Math.min(width * 0.082, height * 0.1, 124), y: height * 0.535, tracking: 0.055 },
         ];
     const fontFamily = '"Palatino Linotype", Georgia, "Times New Roman", serif';
     const mask = document.createElement("canvas");
@@ -1293,7 +1293,7 @@
     whale.finalReactionKind = "pod";
     whale.trail.length = 0;
     whale.trailClock = 0;
-    setPrompt("Cá voi lớn đang mở lối", "Bơi về tâm DE để gọi đàn sao", 1800);
+    setPrompt("Cá voi lớn đang mở lối", "Bơi về tâm PASTEL để gọi đàn sao", 1800);
     return true;
   }
 
@@ -1414,7 +1414,7 @@
         });
         addRipple(centerX, centerY, "#65efff", 0, 0.42);
         spawnWhalePod(centerX, centerY, now);
-        setPrompt("Đàn cá voi con đang thức giấc", "Hai vòng xoắn ốc mở dần từ tâm DE", 2600);
+        setPrompt("Đàn cá voi con đang thức giấc", "Hai vòng xoắn ốc mở dần từ tâm PASTEL", 2600);
         motion.bend = 0.92;
         motion.swimRate = 0;
       }
@@ -1525,7 +1525,7 @@
       motion.tilt = adultPodJourney.homeTilt;
       motion.bend = adultPodJourney.homeBend;
       motion.swimRate = reducedMotion ? 0.9 : 1.24;
-      setPrompt("Cá voi lớn đã trở về", "Đúng vị trí bảo vệ Pastel de Whale", 2400);
+      setPrompt("Cá voi lớn đã trở về", "Đúng vị trí bảo vệ lời chúc dành cho Pastel", 2400);
     }
     return motion;
   }
@@ -2740,8 +2740,8 @@
       if (age > 6.25 && !epilogueStarted) {
         epilogueStarted = true;
         phase = "epilogue";
-        setPrompt("Chạm vào DE", "Mỗi lần chạm là một phép màu khác", 6500);
-        liveStatus.textContent = "Pastel de Whale. Chạm vào cụm chữ để tạo thêm pháo hoa.";
+        setPrompt("Chạm vào PASTEL", "Mỗi lần chạm là một phép màu khác", 6500);
+        liveStatus.textContent = "Chúc mừng Pastel comback. Chạm vào cụm chữ để tạo thêm pháo hoa.";
       }
       if (phase === "epilogue" && now - lastCometAt > (reducedMotion ? 3600 : 1900)) {
         lastCometAt = now;
@@ -4482,7 +4482,7 @@
           : style === "spiral"
             ? "Một vòng xoắn ngân hà"
             : "Cá voi lớn đang mở lối",
-        style === "pod" ? "Chờ đàn cá voi thức giấc từ tâm DE" : "Chạm vào DE lần nữa",
+        style === "pod" ? "Chờ đàn cá voi thức giấc từ tâm PASTEL" : "Chạm vào PASTEL lần nữa",
         2200,
       );
     }
